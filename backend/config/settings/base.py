@@ -117,6 +117,9 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # The SPA owns /admin/* (including the mandatory /admin/mobile/), so Django's
 # admin lives elsewhere. See config/urls.py.
 FRONTEND_DIST_DIR = REPO_DIR / "frontend" / "dist"
+# The SPA build's hashed assets (built with base "/static/") are ordinary static files:
+# served by runserver in development and gathered by collectstatic for deployment.
+STATICFILES_DIRS = [FRONTEND_DIST_DIR] if FRONTEND_DIST_DIR.is_dir() else []
 
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"

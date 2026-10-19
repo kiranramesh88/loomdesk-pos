@@ -2,15 +2,18 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { render } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider, type RouteObject } from 'react-router'
 
+import { ToastProvider } from '@/components/ui/Toast'
 import { createQueryClient } from '@/lib/queryClient'
 
-/** Render routes in a memory router with a fresh query client. */
+/** Render routes in a memory router with a fresh query client and the app's UI providers. */
 export function renderRoutes(routes: RouteObject[], initialPath: string) {
   const queryClient = createQueryClient()
   const router = createMemoryRouter(routes, { initialEntries: [initialPath] })
   const utils = render(
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
+      <ToastProvider>
+        <RouterProvider router={router} />
+      </ToastProvider>
     </QueryClientProvider>,
   )
   return { ...utils, router, queryClient }

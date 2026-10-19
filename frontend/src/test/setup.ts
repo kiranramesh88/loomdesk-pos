@@ -11,6 +11,20 @@ if (isDom && !Element.prototype.hasPointerCapture) {
 if (isDom && !Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = () => {}
 }
+// No media query matches in jsdom unless a test stubs window.matchMedia itself.
+if (isDom && !window.matchMedia) {
+  window.matchMedia = (query: string) =>
+    ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    }) as MediaQueryList
+}
 if (!globalThis.ResizeObserver) {
   globalThis.ResizeObserver = class {
     observe() {}

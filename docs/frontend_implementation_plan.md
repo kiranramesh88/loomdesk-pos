@@ -1,6 +1,6 @@
 # LoomDesk POS: Frontend Implementation Plan
 
-**Status:** All decisions approved on 20 Oct 2026 (see §8). **Phases 0–1 are complete** (see §9).
+**Status:** All decisions approved on 20 Oct 2026 (see §8). **Phases 0–2 are complete** (see §9).
 **Inputs:**
 - `reference/loomdesk-ui-reference.html`: the primary visual reference.
 - `docs/loomdesk_pos_ui_design_plan_v2.md`: the implementation guideline, referred to below as "the spec".
@@ -624,3 +624,86 @@ The nearest compliant shades keep the same hue and are only slightly darker:
 
 **Open:**
 - **Bundle size:** the JS bundle is 485 kB (152 kB gzipped). Route-level lazy loading arrives with the feature pages.
+
+### Phase 2: Admin application shell (plan, approved 20 Oct 2026)
+
+**Scope:** `AdminLayout` for `/admin/*`. Billing and mobile shells are separate phases. No feature pages. Every admin route renders an in-shell placeholder until its phase.
+
+**Visual reference:** the prototype's `.sidebar`, `.topbar` and `.main-content`, from layer 1 as corrected by layer 4. Values come from existing tokens. Prototype sizes below the approved floor (9–10px captions) are raised to 11px.
+
+**Files**
+- `layouts/admin/AdminLayout.tsx`: a flex shell with the sidebar, then a workspace column holding the topbar and `<main id="main">`. Adds a "Skip to content" link.
+- `layouts/admin/AdminSidebar.tsx`:
+  - Navy, 238px wide, 215px at ≤1120 and a 70px icon rail at ≤820.
+  - Brand, then the store card, then the Workspace group, then a new Setup group (Settings, fixing V9), then the profile block.
+- `layouts/admin/AdminTopbar.tsx`:
+  - Sticky, 76px tall (68px at ≤820, 62px at ≤560), white at 96% opacity with a bottom line.
+  - Left: the eyebrow ("Loom & Linen / Workspace") and the section name.
+  - Right: "Mobile view" (secondary), "Open billing" (primary), a separator, then the user chip.
+- `layouts/admin/UserMenu.tsx`: the user chip (avatar, name, role) opens a `Menu` with the name and email, then "Sign out". The sidebar's profile button opens the same menu.
+- `layouts/admin/AdminNavDrawer.tsx`: phone navigation (see decision 1).
+- `layouts/admin/adminNav.ts`: the typed nav config (`{to, label, icon, group}`). It's the single source for the sidebar, rail tooltips, drawer and topbar titles.
+- `features/admin/AdminPlaceholderPage.tsx`: a `PageHeader` plus an `EmptyState` saying when the module arrives. It replaces `ScaffoldPage` for admin.
+
+**Behaviour**
+- **Active state:**
+  - Uses `NavLink`; Overview uses `end` so it matches only `/admin`. Nested routes stay active, so `/admin/products/12` highlights Products.
+  - Active styling: `navy-active` background, a 3px inset `navy-indicator` bar and `aria-current="page"`.
+- **Headings:**
+  - The topbar's section name is plain text, not a heading. Each page's `PageHeader` provides the only `<h1>`; the prototype has two competing headings.
+  - `document.title` is "<Page> · LoomDesk", taken from a route `handle`.
+- **Rail (561–820px):**
+  - Labels, captions and the profile text are hidden.
+  - Each item keeps an `aria-label` and gets a tooltip on hover and focus.
+  - The topbar user chip shows only the avatar.
+- **Phones (≤560px):** the sidebar is hidden and a menu button appears at the left of the topbar (see decision 1). "Mobile view" stays visible as a link to `/admin/mobile/`.
+- **Loading:**
+  - The session check keeps using the existing `PageLoader` before the shell exists.
+  - After that, the shell stays mounted. Route chunks are lazy-loaded, with a skeleton fallback inside `<main>` only, so navigation never blanks the sidebar.
+  - A chunk-load failure shows `ErrorState` with a retry, again inside `<main>`.
+- **Access denied:**
+  - Non-admins keep being redirected to `/403` by the existing `RequireRole`; the guard is unchanged.
+  - An unknown `/admin/...` path shows a not-found state inside the shell rather than a full-page 404.
+- **Sign out:** calls the existing `useLogout`, which clears the cache, then goes to `/login`. A failure shows a toast.
+- **Bundle:** admin routes are lazy-loaded, which also starts reducing the 485 kB bundle.
+
+**Backend (small, read-only):** add `GET /api/v1/store/`, readable by any signed-in staff member. It returns `{name, code, state}` for the sidebar store card, so the store name isn't hardcoded. Includes tests and a schema regeneration.
+
+**Not built, because they would be fake controls:**
+- Global search and its ⌘K shortcut.
+- The notification bell.
+- The "Need a hand? Quick guide" card.
+- The store-switcher chevron (there's only one store).
+- The Returns count badge (no returns API yet).
+
+Each arrives with the phase that gives it real data.
+
+**Tests**
+- **Vitest:**
+  - Active state for Overview versus nested routes, and `aria-current`.
+  - Cashiers are redirected away from `/admin`.
+  - Sign out calls the API and lands on `/login`.
+  - The drawer opens, traps focus, closes on Escape and when a route is chosen, and returns focus to the menu button.
+  - The skip link moves focus to `<main>`.
+  - Document titles are correct.
+  - The store card handles loading and error states.
+- **Playwright:** run at 1440, 1120, 820, 560, 390 and 360px. Checks: screenshots I actually view, no horizontal overflow, a keyboard walk through the nav, rail tooltips, and the phone drawer. Also a direct load and a refresh of a nested admin URL through Django's SPA fallback.
+
+### Phase 2: Admin application shell (done, 20 Oct 2026)
+
+**Built as planned, with the four approved decisions:**
+1. **Phone drawer:** a navy slide-in drawer at ≤560px that uses the shared nav config, with "Switch to mobile admin" as its primary action. It uses Radix Dialog for the focus trap, Escape, backdrop, an `aria-hidden` background and focus return.
+2. **Store endpoint:** `GET /api/v1/store/` is admin-only and read-only. It's tested for admins, signed-out users, cashiers and senior cashiers, and against writes (405).
+3. **No placeholder controls:** no search or ⌘K, no bell, no quick-guide card, no store switcher and no Returns badge. There are no keyboard listeners.
+4. **Rail tooltips:** `@radix-ui/react-tooltip` shows rail labels on hover and keyboard focus.
+
+**Fixes found while verifying:**
+- **Spacing scale:** `<html>` had `font-size: 13px`, so 1rem was 13px and every Tailwind spacing step ran at 81% (for example, `p-5` was 16px instead of 20px). This dated from Phase 0. The size is now on `body` only. Phase 1 screens keep their layout and get the intended spacing.
+- **SPA fallback:** it returned `index.html` for the built `/assets/*.js`, so the production build couldn't start when Django served it (also from Phase 0). Assets now build under `/static/`, Django serves them as static files, and regression tests cover it.
+- **Rail styling:** NavLink's function `className` broke inside the tooltip trigger, because Radix Slot merges it as a string. Active styling now uses `aria-[current=page]`.
+- **Sign out:** a failed sign-out used to clear the local session while the server session stayed alive. It now keeps the user signed in and shows a toast.
+- **Bundle:** the main chunk is 495 kB (155 kB gzipped). Admin code is a separate lazy chunk of 111 kB (37 kB gzipped).
+
+**Open:**
+- **Production serving:** in production `DEBUG=False`, so the `/static/` files need `collectstatic` and a static server (WhiteNoise or the web server). That's decided in Phase 9.
+- **Store data in billing:** if Phase 3 receipts need the store details, `/store/` permissions should widen to staff then.

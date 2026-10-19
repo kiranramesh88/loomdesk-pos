@@ -37,7 +37,10 @@ export function useLogout() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: () => apiFetch<void>('/auth/logout/', { method: 'POST' }),
-    onSettled: () => {
+    onSettled: (_data, error) => {
+      // If the server didn't end the session (e.g. offline), keep the user where they are so
+      // the UI doesn't claim they're signed out. An already-expired session counts as success.
+      if (error && !(error instanceof ApiError && error.isUnauthenticated)) return
       // Drop every cached record from the previous user before anyone else signs in.
       queryClient.clear()
       queryClient.setQueryData(queryKeys.auth.me, null)

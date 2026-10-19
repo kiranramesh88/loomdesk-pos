@@ -7,6 +7,11 @@
     background: var(--color-bg);
     color: var(--color-ink);
     font-family: var(--font-sans);
+  }
+
+  /* On body only: a px size on <html> would redefine 1rem (shrinking Tailwind's whole spacing
+     scale to 81%) and override the reader's browser font-size preference. */
+  body {
     font-size: var(--text-body);
     line-height: var(--text-body--line-height);
     font-weight: var(--font-weight-regular);
@@ -177,4 +182,10 @@
   transition-property: color, background-color, border-color, box-shadow;
   transition-timing-function: var(--ease-out);
   transition-duration: 150ms;
+}
+
+@keyframes slide-in-left {
+  from {
+    transform: translateX(-100%);
+  }
 }

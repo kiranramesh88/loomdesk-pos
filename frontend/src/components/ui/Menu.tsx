@@ -17,10 +17,13 @@ export interface MenuProps {
   trigger: ReactElement
   items: readonly MenuItem[]
   align?: 'start' | 'end'
+  side?: 'top' | 'right' | 'bottom' | 'left'
+  /** Non-interactive heading above the items, e.g. the signed-in user's name and email. */
+  label?: ReactNode
 }
 
 /** Overflow / row-actions menu (Radix: arrow-key navigation, typeahead, focus return). */
-export function Menu({ trigger, items, align = 'end' }: MenuProps) {
+export function Menu({ trigger, items, align = 'end', side = 'bottom', label }: MenuProps) {
   const regular = items.filter((item) => item.tone !== 'danger')
   const destructive = items.filter((item) => item.tone === 'danger')
 
@@ -30,9 +33,17 @@ export function Menu({ trigger, items, align = 'end' }: MenuProps) {
       <RadixMenu.Portal>
         <RadixMenu.Content
           align={align}
+          side={side}
           sideOffset={6}
+          collisionPadding={8}
           className="z-50 min-w-[180px] rounded-control border border-line bg-surface p-1 shadow-overlay"
         >
+          {label && (
+            <>
+              <RadixMenu.Label className="px-2.5 pt-2 pb-2.5">{label}</RadixMenu.Label>
+              <RadixMenu.Separator className="mb-1 h-px bg-line" />
+            </>
+          )}
           {regular.map((item) => (
             <MenuRow key={item.label} item={item} />
           ))}

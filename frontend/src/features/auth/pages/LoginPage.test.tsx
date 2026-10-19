@@ -38,7 +38,8 @@ it('shows the server message for bad credentials and keeps the typed email', asy
   await userEvent.type(await screen.findByLabelText('Email address'), 'anjali@loomlinen.demo')
   await userEvent.type(screen.getByLabelText('Password'), 'wrong')
   await userEvent.click(screen.getByRole('button', { name: 'Sign in' }))
-  expect(await screen.findByRole('alert')).toHaveTextContent('Email or password is incorrect.')
+  // The inline alert, not the (empty) toast live region that also has role=alert.
+  expect((await screen.findByText('Email or password is incorrect.')).closest('[role="alert"]')).not.toBeNull()
   expect(screen.getByLabelText('Email address')).toHaveValue('anjali@loomlinen.demo')
 })
 

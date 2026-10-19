@@ -87,6 +87,22 @@ paths:
               schema:
                 $ref: '#/components/schemas/Session'
           description: ''
+  /api/v1/store/:
+    get:
+      operationId: store_retrieve
+      description: Read-only store identity for the admin sidebar. Editing belongs
+        to the Settings phase.
+      tags:
+      - store
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Store'
+          description: ''
 components:
   schemas:
     LoginRequest:
@@ -167,6 +183,24 @@ components:
           nullable: true
       required:
       - user
+    Store:
+      type: object
+      description: Identity shown in the admin shell. Settings such as tax and discount
+        limits are not exposed here.
+      properties:
+        name:
+          type: string
+          readOnly: true
+        code:
+          type: string
+          readOnly: true
+        state:
+          type: string
+          readOnly: true
+      required:
+      - code
+      - name
+      - state
   securitySchemes:
     cookieAuth:
       type: apiKey

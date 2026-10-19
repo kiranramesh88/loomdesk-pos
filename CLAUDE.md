@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project state
 
-LoomDesk is a POS (point-of-sale) system for a textile/retail store, built as an interview assignment. Work follows the phases in `docs/frontend_implementation_plan.md`. **Phases 0–1 are done.** Phase 0 covers the Django project and models, session login, the typed API client, the router with role guards, and the login page. Phase 1 covers the shared design system in `frontend/src/components/`. Feature areas still render a `ScaffoldPage` placeholder until their phase replaces them. In dev builds, `/dev/ui` shows every shared component in every state.
+LoomDesk is a POS (point-of-sale) system for a textile/retail store, built as an interview assignment. Work follows the phases in `docs/frontend_implementation_plan.md`. **Phases 0–2 are done.** Phase 0 covers the Django project and models, session login, the typed API client, the router with role guards, and the login page. Phase 1 covers the shared design system in `frontend/src/components/`. Phase 2 covers the admin shell in `frontend/src/layouts/admin/`. Each admin module renders `AdminPlaceholderPage` until its phase replaces it, and billing and mobile admin still render `ScaffoldPage`. In dev builds, `/dev/ui` shows every shared component in every state.
 
 ## Commands
 
@@ -52,6 +52,8 @@ npm run build
 - **Layout:** `config/` holds the split settings (`base`, `dev`, `prod`, `test`), URLs, the error envelope and pagination. Domain apps live in `apps/*`.
 - **URLs:** the API is at `/api/v1/`, with the OpenAPI schema at `/api/v1/schema/` and Swagger UI at `/api/v1/docs/`. Django's admin is at **`/django-admin/`** because the SPA owns `/admin/*`, including `/admin/mobile/`. Every other path falls through to `config/spa.py`, which serves `frontend/dist/index.html`.
 - **Auth:** session-based with CSRF; there's no JWT. `LoginView` is explicitly `csrf_protect`ed because DRF skips CSRF for anonymous users. Users log in with their email. The SPA learns who is signed in from `GET /auth/session/`, which always returns 200 with `{user: Me | null}` and sets the CSRF cookie. `/auth/me/` stays protected. A wrong password returns **400** `invalid_credentials`, never 403, so it can't be confused with a CSRF failure. `User.role` (`admin`, `senior_cashier`, `cashier`) drives the permission classes in `apps/accounts/permissions.py`.
+- **Store:** `GET /api/v1/store/` is admin-only and read-only. It returns `{name, code, state}` for the shell's store card. Tax and discount settings aren't exposed there.
+- **SPA serving:** the production build uses `base: '/static/'`, and `STATICFILES_DIRS` points at `frontend/dist`, so Django serves the hashed assets as static files. The SPA fallback only returns `index.html`. `config/tests.py` guards this, and `pytest.ini` includes `config` in its test paths.
 - **Error envelope:** every API error has the shape `{detail, code, fields}` (`config/exceptions.py`). The frontend depends on it.
 - **Money and rates:** money is always **integer paise** (`*_paise` fields), and tax rates are **basis points** (`*_bp`, so 500 = 5%).
 - **Stock:** `Variant` is the stock-tracked unit. `Variant.on_hand` changes **only** through `apps/inventory/services.record_movement()`, which locks the row and writes a `StockMovement`. Never assign `on_hand` directly.
@@ -62,8 +64,9 @@ npm run build
 - **Layout:** `app/` holds the router, guards and providers; `App.tsx` only composes them. Layouts live in `layouts/`. Domain-free primitives go in `components/ui/`, and `components/feedback/` holds the full-page states. Each feature is a folder in `features/<name>/` containing `api.ts` (TanStack Query hooks), `pages/` and `components/`.
 - **Data access:** all API calls go through `lib/http.ts`'s `apiFetch`. It handles CSRF, turns failures into `ApiError` (`isUnauthenticated` / `isForbidden`), and reports network errors as status 0. Query keys come only from `lib/queryKeys.ts`. Mutations never retry.
 - **Types:** API types come from the generated `types/api.gen.ts` and are re-exported from `types/domain.ts`.
+- **Admin shell:** `layouts/admin/adminNav.ts` is the single source for the sidebar, the rail, the phone drawer, the route table (`app/router.tsx` builds one `<path>/*` route per item) and page titles (route `handle.title` → `useAdminTitle`). Add a module there; don't hand-write a separate route or nav entry. Each page's `PageHeader` provides the only `<h1>`; the topbar title is plain text. Page code is lazy-loaded (`app/lazyPages.ts`) with a skeleton and an `errorElement` inside `<main>`, so the shell never blanks.
 - **Routing:** `RequireRole` (in `app/guards.tsx`) redirects anonymous users to `/login?next=…` and the wrong role to `/403`. Admins land on `/admin`, everyone else on `/billing`. `safeNextPath` rejects external `next` values.
-- **Testing:** test helpers are in `src/test/render.tsx`. `renderRoutes` renders a memory router with a fresh query client. Tests mock `fetch` instead of the hooks.
+- **Testing:** test helpers are in `src/test/render.tsx`. `renderRoutes` renders a memory router with a fresh query client and the toast provider. `app/router.tsx` exports `routes`, so tests can mount the real route table. jsdom matches no media query, so shell tests see the phone layout unless they stub `window.matchMedia`. Tests mock `fetch` instead of the hooks.
 
 ## Domain rules that cut across modules
 
@@ -85,6 +88,9 @@ These are easy to get wrong. The backend must enforce them, not just the UI.
 - **Typography:** use the role utilities in `src/styles/index.css` (`type-page-title`, `type-section`, `type-body`, `type-label`, `type-helper`, `type-caption`, `type-eyebrow`, `type-figure`, `type-amount`, `type-nav`) rather than combining size, weight and colour by hand.
 - **Colour contrast:** `tests/contrast.test.ts` checks every colour pairing against WCAG AA, so add a pairing there when you introduce one. `muted` is the lightest colour allowed for readable text. `ink-disabled` is only for disabled controls. Field boundaries (inputs, textareas, selects, search) use `border-control-border`, which reaches 3:1. The lighter `line*` tokens are only for cards, dividers and buttons.
 - **Controls:** heights are `h-control-sm`, `h-control` and `h-control-lg` (32, 38 and 44px). Use `transition-control` rather than `transition-colors`, because the latter animates `outline-color` and makes the focus ring fade in from the wrong colour.
+- **Navigation links:** style the active state with `aria-[current=page]:`, not NavLink's function `className`. Radix `asChild` triggers such as `Tooltip` merge `className` as a string and silently break the function form.
+- **Tooltips:** `TooltipProvider` lives in `AdminLayout`, not `AppProviders`, which keeps Radix's positioning code out of the main bundle.
+- **Root font size:** `<html>` keeps the browser's default size; only `body` is set to 13px. A px size on `html` would shrink every rem-based Tailwind spacing step and override the reader's font-size preference.
 - **Dialogs:** a dialog focuses the first field in its body, or Cancel if the body has none, and returns focus to whatever opened it. Wrap absolutely positioned content inside scroll containers in a `relative` element, or it widens the page; `DataTable` already does this.
 - **Text and radius limits:** the smallest visible text is `text-caption` (11px), and table cells use `text-small` (12px). Radii come in three steps: `rounded-control` (10px), `rounded-card` (15px) and `rounded-panel` (17px).
 - **Breakpoints:** they are mobile-first, translated from the prototype's max-width ones. `sm` starts at 561px, `md` at 821px (full sidebar), and `lg` at 1121px.

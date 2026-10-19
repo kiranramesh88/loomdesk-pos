@@ -12,6 +12,7 @@ import { IconButton } from '@/components/ui/IconButton'
 import { InlineAlert } from '@/components/ui/InlineAlert'
 import { TextField } from '@/components/ui/TextField'
 import { ApiError } from '@/lib/http'
+import { useDocumentTitle } from '@/lib/useDocumentTitle'
 
 import { homePathFor, safeNextPath, useLogin, useMe } from '../api'
 
@@ -25,6 +26,7 @@ type LoginValues = z.infer<typeof loginSchema>
 export function LoginPage() {
   const me = useMe()
   const login = useLogin()
+  useDocumentTitle('Sign in')
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const [showPassword, setShowPassword] = useState(false)

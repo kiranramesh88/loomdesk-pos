@@ -5,7 +5,10 @@ import { defineConfig } from 'vitest/config'
 
 const DJANGO = 'http://127.0.0.1:8000'
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
+  // The production build is served by Django: index.html from the SPA fallback, and the hashed
+  // assets as Django static files under /static/ (STATICFILES_DIRS). The dev server stays at /.
+  base: command === 'build' ? '/static/' : '/',
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
@@ -26,4 +29,4 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.ts'],
     css: false,
   },
-})
+}))

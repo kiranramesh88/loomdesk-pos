@@ -4,6 +4,7 @@ type Schemas = components['schemas']
 
 export type Me = Schemas['Me']
 export type Session = Schemas['Session']
+export type Store = Schemas['Store']
 export type Role = Schemas['RoleEnum']
 export type LoginRequest = Schemas['LoginRequest']
 
