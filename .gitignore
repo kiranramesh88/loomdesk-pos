@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+backend/.venv/
+backend/.env
+backend/db.sqlite3
+backend/media/
+backend/staticfiles/
+.pytest_cache/
+backend/.test-media/
+
+# Seed photos are downloaded on demand by `manage.py fetch_seed_photos`
+backend/seed/photos/
+
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/*.tsbuildinfo
+frontend/coverage/
+
+# Secrets, local data and tool output anywhere in the repo
+.env
+.env.*
+!.env.example
+*.sqlite3
+*.log
+cookies.txt
+frontend/test-results/
+frontend/playwright-report/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

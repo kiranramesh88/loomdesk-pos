@@ -1,0 +1,180 @@
+@import 'tailwindcss';
+@import './tokens.css';
+
+@layer base {
+  html,
+  body {
+    background: var(--color-bg);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: var(--text-body--line-height);
+    font-weight: var(--font-weight-regular);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+    letter-spacing: inherit;
+  }
+
+  button:not(:disabled) {
+    cursor: pointer;
+  }
+
+  :focus-visible {
+    outline: 3px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * Typography roles (plan §4.2). Features use these roles instead of combining
+ * size, weight and colour by hand, so the hierarchy stays consistent.
+ *
+ *  role               size/line  weight  colour   use
+ *  type-page-title    20→24/32   700     ink      one per page (24px from md)
+ *  type-page-desc     13/20      450     muted    one sentence under the page title
+ *  type-section       14/20      650     ink-2    card, panel and dialog titles
+ *  type-section-desc  12/18      450     muted    line under a section title
+ *  type-body          13/20      450     ink-3    paragraphs, table cells
+ *  type-label         12/18      550     ink-3    form labels
+ *  type-helper        12/18      450     muted    hints under fields, metadata
+ *  type-caption       11/16      450     muted    timestamps, footnotes (smallest text)
+ *  type-eyebrow       11/16      600     muted    uppercase overline, table headers
+ *  type-figure        22→25/30   700     ink      KPI values, bill totals (tabular)
+ *  type-amount        13/20      600     ink-2    money in tables and lists (tabular)
+ *  type-nav           13/20      550     —        navigation items (600 when active)
+ */
+@utility type-page-title {
+  font-size: var(--text-heading-sm);
+  line-height: var(--text-heading-sm--line-height);
+  letter-spacing: var(--text-heading-sm--letter-spacing);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-ink);
+  @media (width >= 51.3125rem) {
+    font-size: var(--text-heading);
+    line-height: var(--text-heading--line-height);
+    letter-spacing: var(--text-heading--letter-spacing);
+  }
+}
+@utility type-page-desc {
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
+  font-weight: var(--font-weight-regular);
+  color: var(--color-muted);
+}
+@utility type-section {
+  font-size: var(--text-panel);
+  line-height: var(--text-panel--line-height);
+  letter-spacing: -0.15px;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-ink-2);
+}
+@utility type-section-desc {
+  font-size: var(--text-small);
+  line-height: var(--text-small--line-height);
+  font-weight: var(--font-weight-regular);
+  color: var(--color-muted);
+}
+@utility type-body {
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
+  font-weight: var(--font-weight-regular);
+  color: var(--color-ink-3);
+}
+@utility type-label {
+  font-size: var(--text-small);
+  line-height: var(--text-small--line-height);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-ink-3);
+}
+@utility type-helper {
+  font-size: var(--text-small);
+  line-height: var(--text-small--line-height);
+  font-weight: var(--font-weight-regular);
+  color: var(--color-muted);
+}
+@utility type-caption {
+  font-size: var(--text-caption);
+  line-height: var(--text-caption--line-height);
+  font-weight: var(--font-weight-regular);
+  color: var(--color-muted);
+}
+@utility type-eyebrow {
+  font-size: var(--text-caption);
+  line-height: var(--text-caption--line-height);
+  font-weight: var(--font-weight-strong);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+@utility type-figure {
+  font-size: 22px;
+  line-height: var(--text-figure--line-height);
+  letter-spacing: var(--text-figure--letter-spacing);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ink);
+  @media (width >= 35.0625rem) {
+    font-size: var(--text-figure);
+  }
+}
+@utility type-amount {
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
+  font-weight: var(--font-weight-strong);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ink-2);
+}
+@utility type-nav {
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
+  font-weight: var(--font-weight-medium);
+}
+
+/* Keyboard focus ring for composite controls (e.g. a search box wrapping an input). */
+@utility focus-ring-within {
+  &:has(:focus-visible) {
+    outline: 3px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+}
+
+/* Small entrance animations (120–180 ms, spec §2). Disabled under prefers-reduced-motion above. */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* Hover/press transitions for controls. Unlike Tailwind's transition-control it leaves
+   outline-color alone, so the focus ring appears instantly in the focus colour. */
+@utility transition-control {
+  transition-property: color, background-color, border-color, box-shadow;
+  transition-timing-function: var(--ease-out);
+  transition-duration: 150ms;
+}

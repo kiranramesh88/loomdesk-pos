@@ -1,0 +1,123 @@
+import os
+
+from django.conf import settings
+from django.core.files import File
+from django.core.management.base import BaseCommand, CommandError
+from django.db import transaction
+from django.utils.text import slugify
+
+from apps.accounts.models import User
+from apps.catalog.models import Category, Product, TaxRule, Variant
+from apps.customers.models import Customer
+from apps.inventory.models import StockMovement
+from apps.inventory.services import record_movement
+from apps.store import seed_data
+from apps.store.models import StoreSettings
+from apps.suppliers.models import Supplier
+
+PHOTO_DIR = settings.BASE_DIR / "seed" / "photos"
+
+
+def ean13(first12: str) -> str:
+    total = sum(int(d) * (3 if i % 2 else 1) for i, d in enumerate(first12))
+    return first12 + str((10 - total % 10) % 10)
+
+
+def split_stock(total: int, parts: int) -> list[int]:
+    base, extra = divmod(total, parts)
+    return [base + (1 if i < extra else 0) for i in range(parts)]
+
+
+class Command(BaseCommand):
+    help = "Load the LoomDesk demo store: staff, tax rules, catalogue with variants and stock, suppliers, customers."
+
+    def add_arguments(self, parser):
+        parser.add_argument("--reset", action="store_true", help="Delete existing demo data first.")
+
+    @transaction.atomic
+    def handle(self, *args, **options):
+        if options["reset"]:
+            self._reset()
+        elif Product.objects.exists():
+            raise CommandError("Demo data already present. Re-run with --reset to replace it.")
+
+        password = os.environ.get("SEED_DEMO_PASSWORD", "loomdesk-demo")
+        StoreSettings.load()
+        self._staff(password)
+        self._catalogue()
+        for name, category, phone, email in seed_data.SUPPLIERS:
+            Supplier.objects.create(name=name, category=category, phone=phone, email=email)
+        for name, phone in seed_data.CUSTOMERS:
+            Customer.objects.create(name=name, phone=phone)
+
+        self.stdout.write(self.style.SUCCESS("Demo store loaded."))
+        self.stdout.write(f"All demo accounts use the password: {password}")
+        for full_name, email, role, pin in seed_data.STAFF:
+            pin_note = f" - approval PIN {pin}" if pin else ""
+            self.stdout.write(f"  {email:<26} {role}{pin_note}")
+
+    def _reset(self):
+        StockMovement.objects.all().delete()
+        Variant.objects.all().delete()
+        Product.objects.all().delete()
+        Category.objects.all().delete()
+        TaxRule.objects.all().delete()
+        Supplier.objects.all().delete()
+        Customer.objects.all().delete()
+        User.objects.filter(email__in=[s[1] for s in seed_data.STAFF]).delete()
+
+    def _staff(self, password: str):
+        for full_name, email, role, pin in seed_data.STAFF:
+            user = User.objects.create_user(email=email, password=password, full_name=full_name, role=role)
+            if pin:
+                user.set_approval_pin(pin)
+                user.save(update_fields=["approval_pin_hash"])
+
+    def _catalogue(self):
+        rules = {}
+        for spec in seed_data.TAX_RULES:
+            rule = TaxRule(**spec)
+            rule.full_clean()
+            rule.save()
+            rules[rule.name] = rule
+
+        categories = {}
+        for order, (name, hsn, rule_name) in enumerate(seed_data.CATEGORIES):
+            categories[name] = Category.objects.create(
+                name=name, slug=slugify(name), sort_order=order, hsn_code=hsn, tax_rule=rules[rule_name]
+            )
+
+        opener = User.objects.filter(role="admin").first()
+        for p_index, (code, name, cat, sku, price, cost, stock, threshold, sizes, colours) in enumerate(
+            seed_data.PRODUCTS, start=1
+        ):
+            product = Product.objects.create(
+                name=name,
+                category=categories[cat],
+                base_price_paise=price * 100,
+                cost_price_paise=cost * 100,
+            )
+            photo = PHOTO_DIR / f"{code}.jpg"
+            if photo.exists():
+                with photo.open("rb") as fh:
+                    product.image.save(f"{slugify(name)}.jpg", File(fh), save=True)
+
+            combos = [(s, c) for s in sizes for c in colours]
+            reorder = max(1, threshold // len(combos))
+            for v_index, ((size, colour), qty) in enumerate(zip(combos, split_stock(stock, len(combos))), start=1):
+                variant = Variant.objects.create(
+                    product=product,
+                    size=size,
+                    colour=colour,
+                    sku=f"{sku}-{slugify(size).upper()}-{colour[:3].upper()}",
+                    barcode=ean13(f"890100{p_index:03d}{v_index:03d}"),
+                    reorder_level=reorder,
+                )
+                if qty:
+                    record_movement(
+                        variant=variant,
+                        type=StockMovement.Type.OPENING,
+                        quantity_delta=qty,
+                        actor=opener,
+                        reason="Demo opening stock",
+                    )

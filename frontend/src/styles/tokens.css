@@ -1,0 +1,142 @@
+/*
+ * LoomDesk design tokens — docs/frontend_implementation_plan.md §4.
+ * Values come from the final layer of reference/loomdesk-ui-reference.html.
+ * Tailwind's default palette, type scale, radii and breakpoints are cleared so
+ * only these tokens can be used (e.g. bg-surface, text-ink-2, rounded-card).
+ */
+@theme {
+  /* Colour ---------------------------------------------------------------- */
+  --color-*: initial;
+  --color-transparent: transparent;
+  --color-current: currentColor;
+  --color-white: #ffffff;
+
+  --color-bg: #f5f7fb;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f8f9fc;
+  --color-surface-tint: #f8faff;
+
+  --color-ink: #172337;
+  --color-ink-2: #26364e;
+  --color-ink-3: #45536a;
+  /* Secondary text, placeholders, table headers. Darkened from the prototype's #778297
+     (3.87:1) to meet WCAG AA: 4.83:1 on white, 4.50:1 on bg. Approved 20 Oct 2026. */
+  --color-muted: #697285;
+  /* Disabled text only (exempt from WCAG 1.4.3). Never use for readable content. */
+  --color-ink-disabled: #8290a5;
+
+  --color-line: #e7ebf2;
+  --color-line-strong: #e0e6f0;
+  --color-line-soft: #f0f2f7;
+  /* Boundary of text fields, textareas, selects and search fields: the only cue that a box
+     is editable, so it needs WCAG 1.4.11's 3:1 (3.30:1 on white, 3.08:1 on bg). Same cool
+     slate hue as the lines; cards, dividers and buttons keep the lighter line tokens. */
+  --color-control-border: #848ea0;
+
+  --color-primary: #3159d9;
+  --color-primary-hover: #274ac2;
+  --color-primary-soft: #edf2ff;
+  --color-primary-border: #dbe4fb;
+  --color-primary-disabled: #c9d3ee;
+  /* Focus ring. The prototype's #9db5ff was 2.0:1 on white, below the 3:1 non-text minimum;
+     this is the brand gradient's start colour (3.30:1 on white, 3.08:1 on bg). */
+  --color-focus: #6c86f5;
+  --color-brand-from: #6c86f5; /* brand mark gradient start */
+
+  --color-navy: #17243a;
+  --color-navy-2: #202f48;
+  --color-navy-3: #253650;
+  --color-navy-border: #34435b;
+  --color-navy-active: #2e4c91;
+  --color-navy-indicator: #83a0ff;
+  --color-navy-text: #a5b2c8;
+  --color-navy-caption: #8291aa;
+  --color-backdrop: rgba(16, 27, 44, 0.46);
+
+  /* Status colours darkened just enough for 4.5:1 on their tinted backgrounds (same hues). */
+  --color-success: #157e5e;
+  --color-success-bg: #e9f7f1;
+  --color-warning: #9f6411;
+  --color-warning-bg: #fff5e4;
+  --color-danger: #ba4a54;
+  --color-danger-bg: #fff0f1;
+  --color-neutral: #5c6b82;
+  --color-neutral-bg: #eef1f6;
+
+  --color-chart-1: #3159d9;
+  --color-chart-2: #8ba1ee;
+  --color-chart-3: #d1dbff;
+  --color-chart-4: #e7ecf6;
+
+  /* Typography ------------------------------------------------------------ */
+  --font-*: initial;
+  --font-sans: 'Manrope Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  --font-weight-*: initial;
+  --font-weight-regular: 450;
+  --font-weight-medium: 550;
+  --font-weight-strong: 600;
+  --font-weight-semibold: 650;
+  --font-weight-bold: 700;
+  --font-weight-brand: 750;
+
+  --text-*: initial;
+  --text-caption: 11px; /* floor for any visible text */
+  --text-caption--line-height: 16px;
+  --text-small: 12px; /* table cells, dense metadata */
+  --text-small--line-height: 18px;
+  --text-body: 13px;
+  --text-body--line-height: 20px;
+  --text-panel: 14px;
+  --text-panel--line-height: 20px;
+  --text-title: 15px;
+  --text-title--line-height: 22px;
+  --text-price: 16px;
+  --text-price--line-height: 22px;
+  --text-price--letter-spacing: -0.45px;
+  --text-brand: 17px;
+  --text-brand--line-height: 22px;
+  --text-brand--letter-spacing: -0.65px;
+  --text-heading-sm: 20px;
+  --text-heading-sm--line-height: 28px;
+  --text-heading-sm--letter-spacing: -0.6px;
+  --text-heading: 24px;
+  --text-heading--line-height: 32px;
+  --text-heading--letter-spacing: -0.75px;
+  --text-figure: 25px;
+  --text-figure--line-height: 30px;
+  --text-figure--letter-spacing: -0.75px;
+
+  /* Shape and elevation --------------------------------------------------- */
+  --radius-*: initial;
+  --radius-sm: 6px;
+  --radius-control: 10px;
+  --radius-mark: 11px; /* brand mark */
+  --radius-card: 15px;
+  --radius-panel: 17px;
+  --radius-full: 9999px;
+
+  --shadow-*: initial;
+  --shadow-card: 0 2px 7px rgba(23, 36, 58, 0.025);
+  --shadow-card-hover: 0 7px 18px rgba(35, 60, 130, 0.07);
+  --shadow-panel: 0 3px 14px rgba(23, 36, 58, 0.025);
+  --shadow-overlay: 0 14px 38px rgba(23, 36, 58, 0.07);
+  --shadow-primary: 0 4px 10px rgba(49, 89, 217, 0.13);
+  --shadow-brand: 0 6px 16px rgba(12, 24, 54, 0.22);
+
+  /* Layout ---------------------------------------------------------------- */
+  /* Mobile-first versions of the prototype's max-width breakpoints (560 / 820 / 1120). */
+  --breakpoint-*: initial;
+  --breakpoint-sm: 35.0625rem; /* 561px: above phone */
+  --breakpoint-md: 51.3125rem; /* 821px: full sidebar instead of rail */
+  --breakpoint-lg: 70.0625rem; /* 1121px: full desktop */
+  --breakpoint-xl: 90rem;
+
+  /* Control heights: every button, input and select uses one of these. */
+  --spacing-control-sm: 32px;
+  --spacing-control: 38px;
+  --spacing-control-lg: 44px;
+
+  --ease-out: cubic-bezier(0.2, 0.7, 0.3, 1);
+  --default-transition-duration: 150ms;
+}

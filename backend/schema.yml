@@ -1,0 +1,174 @@
+openapi: 3.0.3
+info:
+  title: LoomDesk POS API
+  version: 1.0.0
+paths:
+  /api/v1/auth/csrf/:
+    get:
+      operationId: auth_csrf_retrieve
+      description: Sets the csrftoken cookie so the SPA can make its first unsafe
+        request (login).
+      tags:
+      - auth
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /api/v1/auth/login/:
+    post:
+      operationId: auth_login_create
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Me'
+          description: ''
+  /api/v1/auth/logout/:
+    post:
+      operationId: auth_logout_create
+      tags:
+      - auth
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/auth/me/:
+    get:
+      operationId: auth_me_retrieve
+      tags:
+      - auth
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Me'
+          description: ''
+  /api/v1/auth/session/:
+    get:
+      operationId: auth_session_retrieve
+      description: |-
+        Who is signed in, if anyone. Always 200 so the app's startup check isn't an error.
+
+        Anonymous callers learn nothing beyond `user: null`; protected endpoints, including
+        `me/`, still refuse them. Also sets the csrftoken cookie, so login needs no extra request.
+      tags:
+      - auth
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+          description: ''
+components:
+  schemas:
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+      required:
+      - email
+      - password
+    Me:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+          title: Email address
+        full_name:
+          type: string
+          readOnly: true
+        initials:
+          type: string
+          readOnly: true
+        role:
+          allOf:
+          - $ref: '#/components/schemas/RoleEnum'
+          readOnly: true
+        permissions:
+          allOf:
+          - $ref: '#/components/schemas/Permissions'
+          readOnly: true
+      required:
+      - email
+      - full_name
+      - id
+      - initials
+      - permissions
+      - role
+    Permissions:
+      type: object
+      properties:
+        can_access_admin:
+          type: boolean
+        can_approve_discounts:
+          type: boolean
+        can_view_costs:
+          type: boolean
+      required:
+      - can_access_admin
+      - can_approve_discounts
+      - can_view_costs
+    RoleEnum:
+      enum:
+      - admin
+      - senior_cashier
+      - cashier
+      type: string
+      description: |-
+        * `admin` - Admin
+        * `senior_cashier` - Senior cashier
+        * `cashier` - Cashier
+    Session:
+      type: object
+      properties:
+        user:
+          allOf:
+          - $ref: '#/components/schemas/Me'
+          nullable: true
+      required:
+      - user
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: sessionid
