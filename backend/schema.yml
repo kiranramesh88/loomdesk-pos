@@ -87,6 +87,266 @@ paths:
               schema:
                 $ref: '#/components/schemas/Session'
           description: ''
+  /api/v1/catalog/categories/:
+    get:
+      operationId: catalog_categories_list
+      description: Categories with their HSN code and tax rule, for the product form
+        and catalogue filter.
+      tags:
+      - catalog
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Category'
+          description: ''
+  /api/v1/catalog/products/:
+    get:
+      operationId: catalog_products_list
+      description: Admin catalogue. Products are deactivated, never deleted, so sales
+        and stock history keep their links.
+      parameters:
+      - in: query
+        name: category
+        schema:
+          type: integer
+      - in: query
+        name: ordering
+        schema:
+          type: array
+          items:
+            type: string
+            enum:
+            - -name
+            - -price
+            - -sku
+            - -stock
+            - -updated
+            - name
+            - price
+            - sku
+            - stock
+            - updated
+        description: |-
+          Ordering
+
+          * `name` - Name
+          * `-name` - Name (descending)
+          * `sku` - Sku
+          * `-sku` - Sku (descending)
+          * `price` - Price
+          * `-price` - Price (descending)
+          * `stock` - Stock
+          * `-stock` - Stock (descending)
+          * `updated` - Updated
+          * `-updated` - Updated (descending)
+        explode: false
+        style: form
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: q
+        schema:
+          type: string
+        description: Name, product or variant SKU, or barcode
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - active
+          - inactive
+        description: |-
+          * `active` - Active
+          * `inactive` - Inactive
+      - in: query
+        name: stock
+        schema:
+          type: string
+          enum:
+          - in_stock
+          - low_stock
+          - out_of_stock
+        description: |-
+          * `in_stock` - In stock
+          * `low_stock` - Low stock
+          * `out_of_stock` - Out of stock
+      tags:
+      - catalog
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedProductListList'
+          description: ''
+    post:
+      operationId: catalog_products_create
+      description: Admin catalogue. Products are deactivated, never deleted, so sales
+        and stock history keep their links.
+      tags:
+      - catalog
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProductWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProductWriteRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductDetail'
+          description: ''
+  /api/v1/catalog/products/{id}/:
+    get:
+      operationId: catalog_products_retrieve
+      description: Admin catalogue. Products are deactivated, never deleted, so sales
+        and stock history keep their links.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this product.
+        required: true
+      tags:
+      - catalog
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductDetail'
+          description: ''
+    patch:
+      operationId: catalog_products_partial_update
+      description: Admin catalogue. Products are deactivated, never deleted, so sales
+        and stock history keep their links.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this product.
+        required: true
+      tags:
+      - catalog
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedProductWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedProductWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedProductWriteRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductDetail'
+          description: ''
+  /api/v1/catalog/products/{id}/image/:
+    post:
+      operationId: catalog_products_image_create
+      description: Admin catalogue. Products are deactivated, never deleted, so sales
+        and stock history keep their links.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this product.
+        required: true
+      tags:
+      - catalog
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProductImageRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductDetail'
+          description: ''
+    delete:
+      operationId: catalog_products_image_destroy
+      description: Admin catalogue. Products are deactivated, never deleted, so sales
+        and stock history keep their links.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this product.
+        required: true
+      tags:
+      - catalog
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductDetail'
+          description: ''
+  /api/v1/catalog/tax-rules/:
+    get:
+      operationId: catalog_tax_rules_list
+      tags:
+      - catalog
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TaxRule'
+          description: ''
   /api/v1/store/:
     get:
       operationId: store_retrieve
@@ -105,6 +365,39 @@ paths:
           description: ''
 components:
   schemas:
+    Category:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        hsn_code:
+          type: string
+          readOnly: true
+        tax_rule:
+          allOf:
+          - $ref: '#/components/schemas/TaxRule'
+          readOnly: true
+      required:
+      - hsn_code
+      - id
+      - name
+      - tax_rule
+    CategoryRef:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+      required:
+      - id
+      - name
     LoginRequest:
       type: object
       properties:
@@ -151,6 +444,70 @@ components:
       - initials
       - permissions
       - role
+    PaginatedProductListList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductList'
+    PatchedProductWriteRequest:
+      type: object
+      description: |-
+        Create or update a product and its variants in one atomic request.
+
+        Stock is never edited here. New variants may carry opening stock, which is recorded as an
+        OPENING movement through inventory.services.record_movement (the only path that changes stock).
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        sku:
+          type: string
+          minLength: 1
+          maxLength: 40
+        description:
+          type: string
+        category:
+          type: integer
+        base_price_paise:
+          type: integer
+          maximum: 1000000000
+          minimum: 1
+        cost_price_paise:
+          type: integer
+          maximum: 1000000000
+          minimum: 0
+          nullable: true
+        hsn_code:
+          type: string
+          maxLength: 8
+        tax_rule:
+          type: integer
+          nullable: true
+        status:
+          $ref: '#/components/schemas/ProductStatusEnum'
+        variants:
+          type: array
+          items:
+            $ref: '#/components/schemas/VariantWriteRequest'
     Permissions:
       type: object
       properties:
@@ -164,6 +521,215 @@ components:
       - can_access_admin
       - can_approve_discounts
       - can_view_costs
+    ProductDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        sku:
+          type: string
+          readOnly: true
+        description:
+          type: string
+          readOnly: true
+        category:
+          allOf:
+          - $ref: '#/components/schemas/Category'
+          readOnly: true
+        base_price_paise:
+          type: integer
+          readOnly: true
+        cost_price_paise:
+          type: integer
+          readOnly: true
+          nullable: true
+        hsn_code:
+          type: string
+          readOnly: true
+        effective_hsn_code:
+          type: string
+          readOnly: true
+        tax_rule:
+          allOf:
+          - $ref: '#/components/schemas/TaxRule'
+          readOnly: true
+        effective_tax_rule:
+          allOf:
+          - $ref: '#/components/schemas/TaxRule'
+          readOnly: true
+        image_url:
+          type: string
+          nullable: true
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/ProductStatusEnum'
+          readOnly: true
+        variants:
+          type: array
+          items:
+            $ref: '#/components/schemas/Variant'
+          readOnly: true
+        recent_movements:
+          type: array
+          items:
+            $ref: '#/components/schemas/StockMovement'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - base_price_paise
+      - category
+      - cost_price_paise
+      - created_at
+      - description
+      - effective_hsn_code
+      - effective_tax_rule
+      - hsn_code
+      - id
+      - image_url
+      - name
+      - recent_movements
+      - sku
+      - status
+      - tax_rule
+      - updated_at
+      - variants
+    ProductImageRequest:
+      type: object
+      properties:
+        image:
+          type: string
+          format: binary
+      required:
+      - image
+    ProductList:
+      type: object
+      description: One catalogue row. Stock figures come from queryset annotations
+        over active variants.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        sku:
+          type: string
+          readOnly: true
+        category:
+          allOf:
+          - $ref: '#/components/schemas/CategoryRef'
+          readOnly: true
+        image_url:
+          type: string
+          nullable: true
+          readOnly: true
+        base_price_paise:
+          type: integer
+          readOnly: true
+        min_price_paise:
+          type: integer
+          readOnly: true
+        max_price_paise:
+          type: integer
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/ProductStatusEnum'
+          readOnly: true
+        variant_count:
+          type: integer
+          readOnly: true
+        total_on_hand:
+          type: integer
+          readOnly: true
+        stock_state:
+          allOf:
+          - $ref: '#/components/schemas/StockStateEnum'
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - base_price_paise
+      - category
+      - id
+      - image_url
+      - max_price_paise
+      - min_price_paise
+      - name
+      - sku
+      - status
+      - stock_state
+      - total_on_hand
+      - updated_at
+      - variant_count
+    ProductStatusEnum:
+      enum:
+      - active
+      - inactive
+      type: string
+      description: |-
+        * `active` - Active
+        * `inactive` - Inactive
+    ProductWriteRequest:
+      type: object
+      description: |-
+        Create or update a product and its variants in one atomic request.
+
+        Stock is never edited here. New variants may carry opening stock, which is recorded as an
+        OPENING movement through inventory.services.record_movement (the only path that changes stock).
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        sku:
+          type: string
+          minLength: 1
+          maxLength: 40
+        description:
+          type: string
+        category:
+          type: integer
+        base_price_paise:
+          type: integer
+          maximum: 1000000000
+          minimum: 1
+        cost_price_paise:
+          type: integer
+          maximum: 1000000000
+          minimum: 0
+          nullable: true
+        hsn_code:
+          type: string
+          maxLength: 8
+        tax_rule:
+          type: integer
+          nullable: true
+        status:
+          $ref: '#/components/schemas/ProductStatusEnum'
+        variants:
+          type: array
+          items:
+            $ref: '#/components/schemas/VariantWriteRequest'
+      required:
+      - base_price_paise
+      - category
+      - name
+      - sku
     RoleEnum:
       enum:
       - admin
@@ -183,6 +749,81 @@ components:
           nullable: true
       required:
       - user
+    StockMovement:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        type:
+          allOf:
+          - $ref: '#/components/schemas/StockMovementTypeEnum'
+          readOnly: true
+        type_label:
+          type: string
+          readOnly: true
+        variant_label:
+          type: string
+          readOnly: true
+        quantity_delta:
+          type: integer
+          readOnly: true
+        balance_after:
+          type: integer
+          readOnly: true
+        reason:
+          type: string
+          readOnly: true
+        reference:
+          type: string
+          readOnly: true
+        actor_name:
+          type: string
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - actor_name
+      - balance_after
+      - created_at
+      - id
+      - quantity_delta
+      - reason
+      - reference
+      - type
+      - type_label
+      - variant_label
+    StockMovementTypeEnum:
+      enum:
+      - opening
+      - purchase
+      - sale
+      - return
+      - adjust_add
+      - adjust_remove
+      - count
+      type: string
+      description: |-
+        * `opening` - Opening stock
+        * `purchase` - Purchase received
+        * `sale` - Sale
+        * `return` - Customer return
+        * `adjust_add` - Adjustment (add)
+        * `adjust_remove` - Adjustment (remove)
+        * `count` - Stock count
+    StockStateEnum:
+      enum:
+      - in_stock
+      - low_stock
+      - out_of_stock
+      type: string
+      description: |-
+        * `in_stock` - in_stock
+        * `low_stock` - low_stock
+        * `out_of_stock` - out_of_stock
     Store:
       type: object
       description: Identity shown in the admin shell. Settings such as tax and discount
@@ -201,6 +842,154 @@ components:
       - code
       - name
       - state
+    TaxRule:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/TaxRuleKindEnum'
+          readOnly: true
+        flat_rate_bp:
+          type: integer
+          readOnly: true
+          nullable: true
+        threshold_paise:
+          type: integer
+          readOnly: true
+          nullable: true
+        lower_rate_bp:
+          type: integer
+          readOnly: true
+          nullable: true
+        upper_rate_bp:
+          type: integer
+          readOnly: true
+          nullable: true
+        summary:
+          type: string
+          description: Plain-language rate, e.g. "5% up to ₹2,500 per unit, 18% above".
+          readOnly: true
+      required:
+      - flat_rate_bp
+      - id
+      - kind
+      - lower_rate_bp
+      - name
+      - summary
+      - threshold_paise
+      - upper_rate_bp
+    TaxRuleKindEnum:
+      enum:
+      - flat
+      - price_band
+      type: string
+      description: |-
+        * `flat` - Flat rate
+        * `price_band` - Price band
+    Variant:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        size:
+          type: string
+          readOnly: true
+        colour:
+          type: string
+          readOnly: true
+        sku:
+          type: string
+          readOnly: true
+        barcode:
+          type: string
+          readOnly: true
+          nullable: true
+        price_override_paise:
+          type: integer
+          readOnly: true
+          nullable: true
+        price_paise:
+          type: integer
+          readOnly: true
+        on_hand:
+          type: integer
+          readOnly: true
+        reorder_level:
+          type: integer
+          readOnly: true
+        is_active:
+          type: boolean
+          readOnly: true
+        stock_state:
+          allOf:
+          - $ref: '#/components/schemas/StockStateEnum'
+          readOnly: true
+        has_history:
+          type: boolean
+          readOnly: true
+      required:
+      - barcode
+      - colour
+      - has_history
+      - id
+      - is_active
+      - on_hand
+      - price_override_paise
+      - price_paise
+      - reorder_level
+      - size
+      - sku
+      - stock_state
+    VariantWriteRequest:
+      type: object
+      properties:
+        id:
+          type: integer
+        size:
+          type: string
+          minLength: 1
+          maxLength: 20
+        colour:
+          type: string
+          minLength: 1
+          maxLength: 30
+        sku:
+          type: string
+          minLength: 1
+          maxLength: 40
+        barcode:
+          type: string
+          nullable: true
+          maxLength: 32
+        price_override_paise:
+          type: integer
+          maximum: 1000000000
+          minimum: 1
+          nullable: true
+        reorder_level:
+          type: integer
+          maximum: 10000
+          minimum: 0
+          default: 2
+        is_active:
+          type: boolean
+          default: true
+        opening_stock:
+          type: integer
+          maximum: 100000
+          minimum: 0
+          default: 0
+      required:
+      - colour
+      - size
+      - sku
   securitySchemes:
     cookieAuth:
       type: apiKey

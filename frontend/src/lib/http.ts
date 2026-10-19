@@ -77,7 +77,9 @@ export interface RequestOptions {
 export async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const method = options.method ?? 'GET'
   const headers: Record<string, string> = { Accept: 'application/json', ...options.headers }
-  if (options.body !== undefined) headers['Content-Type'] = 'application/json'
+  // FormData (file uploads) sets its own multipart boundary; everything else is JSON.
+  const isForm = options.body instanceof FormData
+  if (options.body !== undefined && !isForm) headers['Content-Type'] = 'application/json'
   if (UNSAFE_METHODS.has(method)) headers['X-CSRFToken'] = await ensureCsrfToken()
 
   let response: Response
@@ -85,7 +87,7 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
     response = await fetch(`${API_BASE}${path}`, {
       method,
       headers,
-      body: options.body === undefined ? undefined : JSON.stringify(options.body),
+      body: options.body === undefined ? undefined : isForm ? (options.body as FormData) : JSON.stringify(options.body),
       credentials: 'same-origin',
       signal: options.signal,
     })

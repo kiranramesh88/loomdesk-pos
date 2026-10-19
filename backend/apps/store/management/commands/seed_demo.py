@@ -93,6 +93,7 @@ class Command(BaseCommand):
         ):
             product = Product.objects.create(
                 name=name,
+                sku=sku,
                 category=categories[cat],
                 base_price_paise=price * 100,
                 cost_price_paise=cost * 100,

@@ -4,9 +4,9 @@ import { createBrowserRouter, Link, type RouteObject } from 'react-router'
 
 import { PageLoader } from '@/components/feedback/PageLoader'
 import { StatusScreen } from '@/components/feedback/StatusScreen'
-import { LoginPage } from '@/features/auth/pages/LoginPage'
 import { ADMIN_NAV, type AdminRouteHandle } from '@/layouts/admin/adminNav'
 import { AdminNotFound, AdminRouteError, AdminShellError } from '@/layouts/admin/AdminPageStates'
+import { productRoutes } from '@/features/products/routes'
 import { ALL_ROLES } from '@/types/domain'
 
 import { HomeRedirect, RequireRole } from './guards'
@@ -29,11 +29,18 @@ const devRoutes: RouteObject[] = import.meta.env.DEV
     ]
   : []
 
+// Built modules supply their own child routes; the rest show a placeholder until their phase.
+const MODULE_ROUTES: Partial<Record<string, RouteObject[]>> = {
+  products: productRoutes,
+}
+
 // One route per nav item, so titles, active links and nested paths come from the same config.
-// `products/*` keeps /admin/products/12 inside Products until Phase 4 adds the real child routes.
+// `<path>/*` keeps deep links such as /admin/suppliers/12 inside their placeholder module.
 const adminRoutes: RouteObject[] = [
   ...ADMIN_NAV.map((item): RouteObject => {
     const handle: AdminRouteHandle = { title: item.label }
+    const children = MODULE_ROUTES[item.path]
+    if (children) return { path: item.path, handle, children }
     const element = <AdminPlaceholderPage item={item} />
     return item.path ? { path: `${item.path}/*`, element, handle } : { index: true, element, handle }
   }),
@@ -44,7 +51,12 @@ const adminRoutes: RouteObject[] = [
 export const routes: RouteObject[] = [
   ...devRoutes,
   { path: '/', element: <HomeRedirect /> },
-  { path: '/login', element: <LoginPage /> },
+  // Lazy like the admin shell, so form libraries (react-hook-form, zod) stay out of the entry chunk.
+  {
+    path: '/login',
+    lazy: async () => ({ Component: (await import('@/features/auth/pages/LoginPage')).LoginPage }),
+    hydrateFallbackElement: <PageLoader />,
+  },
   {
     element: <RequireRole roles={ALL_ROLES} />,
     children: [{ path: '/billing/*', element: <ScaffoldPage area="Billing portal" phase={3} /> }],

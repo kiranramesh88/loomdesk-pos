@@ -63,6 +63,8 @@ These can't be carried over from the prototype.
 
 Each phase ends in something that can be demoed. The backend and frontend for a module ship together, following the spec's order in §10. The big change from that order is that billing comes early.
 
+> **Renumbered on 20 Oct 2026 (the user's call):** Products was built as **Phase 3**, ahead of Billing. Stock adjustment and movement history from row 4 stay with the Inventory module, and Billing follows when the user schedules it. The table below keeps the original plan for reference; §9 logs the order actually built.
+
 | Phase | Scope | Exit criteria |
 |---|---|---|
 | **0. Foundations** | Scaffold Vite, set up the Tailwind theme from §4's tokens, load Manrope and wire the providers (Router, QueryClient). Scaffold Django: settings, Postgres, apps, session auth, OpenAPI schema. Generate TS types from the schema. Add seed data (products with variants and photos, staff, suppliers). | `npm run dev` and `manage.py runserver` both work. Login works. The typed API client compiles against the generated schema. |
@@ -378,7 +380,7 @@ loomdesk/
 5. While the request is pending, the submit button is disabled. A retry with the same key returns the original sale instead of creating a duplicate.
 
 ### 6.5 Images
-`Product.image` (one photo per product for now) uses Django `ImageField` storage, served from `/media/` (an object store in production). The API returns absolute URLs. `ProductPhoto` enforces one treatment everywhere: `object-contain` on a white background, a fixed aspect ratio, lazy loading, and the `ImageOff` placeholder as the fallback.
+`Product.image` (one photo per product for now) uses Django `ImageField` storage, served from `/media/` (an object store in production). The API returns site-relative URLs (`/media/products/…`), which the Vite proxy and Django both serve. Uploads go to `POST /catalog/products/{id}/image/` (JPEG, PNG or WebP, up to 5 MB, verified with Pillow, stored under the product SKU), and `DELETE` on the same path removes the photo. `ProductPhoto` enforces one treatment everywhere: `object-contain` on a white background, a fixed aspect ratio, lazy loading, and the `ImageOff` placeholder as the fallback.
 
 ### 6.6 New dependencies
 None are added until you approve them.
@@ -437,12 +439,12 @@ Every checklist assumes the cross-cutting checks pass:
 - [ ] Before the first sale, a first-use empty state is shown.
 
 ### Products
-- [ ] Search and the filters (category, availability, stock state) are reflected in the URL. Active filters are shown with a Clear action.
-- [ ] The table shows Product (with photo), SKU, Category, Price, Stock (as text), Status and Actions. Long names wrap without clipping.
-- [ ] The form has sections for Info, Pricing & tax, Variants and Inventory. Errors are inline and values are kept after a server error.
-- [ ] Duplicate SKUs and barcodes are rejected by the server and the error is shown on the field.
-- [ ] Archiving requires confirmation. Editing a product doesn't change past invoices (verified on an existing sale).
-- [ ] Cost and margin are visible only to Admin.
+- [x] Search and the filters (category, availability, stock state) are reflected in the URL. Active filters are shown with a Clear action.
+- [x] The table shows Product (with photo), SKU, Category, Price, Stock (as text), Status and Actions. Long names wrap without clipping.
+- [x] The form has sections for Info, Pricing & tax, Variants and Inventory. Errors are inline and values are kept after a server error.
+- [x] Duplicate SKUs and barcodes are rejected by the server and the error is shown on the field.
+- [ ] Archiving requires confirmation. Editing a product doesn't change past invoices (verified on an existing sale). *Confirmation done; the invoice half waits for Billing, since no sales exist yet.*
+- [x] Cost and margin are visible only to Admin. *The whole catalogue API is admin-only for now.*
 
 ### Inventory
 - [ ] The summary shows tracked variant, low-stock and out-of-stock counts.
@@ -707,3 +709,52 @@ Each arrives with the phase that gives it real data.
 **Open:**
 - **Production serving:** in production `DEBUG=False`, so the `/static/` files need `collectstatic` and a static server (WhiteNoise or the web server). That's decided in Phase 9.
 - **Store data in billing:** if Phase 3 receipts need the store details, `/store/` permissions should widen to staff then.
+
+### Phase 3: Products (done, 20 Oct 2026)
+
+**Backend (`apps/catalog`):**
+- **API** under `/api/v1/catalog/`, every endpoint `IsAdmin`:
+  - `products/`: list with `q` (name, product SKU, variant SKU, exact barcode), `category`, `status`, `stock` (in, low or out of stock), `ordering` (name, sku, price, stock, updated) and pagination.
+  - `products/{id}/`: detail (variants, effective GST rule and HSN, last eight stock movements) and `PATCH`.
+  - `products/{id}/image/`: photo upload and delete.
+  - `categories/` and `tax-rules/`: read-only.
+  - Products can't be deleted (405). They're deactivated instead.
+- **Schema changes** (migration `catalog.0002`):
+  - `Product.sku`, the unique style code. Existing rows are back-filled from their variant SKUs.
+  - The `archived` status becomes `inactive`.
+- **Variants:**
+  - Saved in the same atomic request as the product.
+  - Duplicate size and colour, SKU and barcode are caught inside the request and across products. Errors come back as `variants.N.field`.
+  - The error envelope now flattens nested errors into dotted paths.
+  - EAN and UPC barcodes must pass their check digit.
+  - Blank barcodes are stored as `null`, so they never collide.
+- **Stock:**
+  - The product form never writes `on_hand`.
+  - New variants can carry opening stock, recorded through `record_movement` as an `OPENING` movement.
+  - A variant with movements keeps its size and colour and can't be removed. It can only be marked inactive.
+  - A unique-constraint race returns a clean 400.
+- **Tests:** 68 new catalogue tests cover permissions, CSRF, search, filtering, sorting, validation, duplicates, variant rules, rollback and stock integrity.
+
+**Frontend (`features/products`):**
+- **Routes:** `/admin/products`, `/new`, `/:productId` and `/:productId/edit`, lazy-loaded through the router's per-module `MODULE_ROUTES`.
+- **List:**
+  - Search, filters and sort live in the URL.
+  - The search box waits 300 ms after typing stops. Clear drops any search still waiting.
+  - The table becomes cards at ≤560px.
+  - It has loading, empty (filtered or new), error-with-retry and page-out-of-range states.
+- **Form:**
+  - Sections: Product information, Pricing & tax, Variants & inventory.
+  - zod validation plus server errors mapped onto fields.
+  - Values are kept after a failed save.
+  - Margin hint, GST rule summary, and variant SKUs suggested in the house style.
+  - The photo is applied on save, so Cancel discards it.
+- **Detail:** summary with cost and margin, a variants table (rows on phones), recent movements, and Deactivate/Reactivate behind a confirmation.
+- **Shared UI:** a new `Checkbox` component, and `apiFetch` now sends `FormData`.
+- **Bundle:** the login route is now lazy too, so react-hook-form and zod no longer sit in the entry chunk. The main chunk went from 495 kB to 240 kB.
+
+**Open:**
+- **Billing access:** the catalogue API is admin-only. Billing will need a staff-readable search endpoint without cost prices, rather than a wider permission here.
+- **Stock adjustment:** stock adjustment and full movement history belong to the Inventory module.
+- **Past invoices:** the checklist item that edits leave past invoices unchanged can only be verified once Billing creates sales.
+- **Old photos:** reseeding leaves the previous photo files in `media/`. Only the image endpoint deletes a replaced photo.
+

@@ -8,6 +8,18 @@ export type Store = Schemas['Store']
 export type Role = Schemas['RoleEnum']
 export type LoginRequest = Schemas['LoginRequest']
 
+export type TaxRule = Schemas['TaxRule']
+export type Category = Schemas['Category']
+export type ProductListItem = Schemas['ProductList']
+export type ProductPage = Schemas['PaginatedProductListList']
+export type ProductDetail = Schemas['ProductDetail']
+export type Variant = Schemas['Variant']
+export type StockMovement = Schemas['StockMovement']
+export type ProductWrite = Schemas['ProductWriteRequest']
+export type VariantWrite = Schemas['VariantWriteRequest']
+export type ProductStatus = Schemas['ProductStatusEnum']
+export type StockState = Schemas['StockStateEnum']
+
 export const ROLE_LABELS: Record<Role, string> = {
   admin: 'Admin',
   senior_cashier: 'Senior cashier',

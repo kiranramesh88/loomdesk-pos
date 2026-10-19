@@ -58,9 +58,12 @@ class Category(models.Model):
 class Product(models.Model):
     class Status(models.TextChoices):
         ACTIVE = "active", "Active"
-        ARCHIVED = "archived", "Archived"
+        # Hidden from billing but kept with its variants and stock history; never deleted.
+        INACTIVE = "inactive", "Inactive"
 
     name = models.CharField(max_length=120)
+    # Style code shared by every variant (e.g. "SH-CT-001"); variant SKUs usually extend it.
+    sku = models.CharField("SKU", max_length=40, unique=True)
     category = models.ForeignKey(Category, on_delete=models.PROTECT, related_name="products")
     description = models.TextField(blank=True)
     base_price_paise = models.PositiveBigIntegerField()

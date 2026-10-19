@@ -9,6 +9,7 @@ from .spa import spa_index
 api_v1 = [
     path("auth/", include("apps.accounts.urls")),
     path("store/", include("apps.store.urls")),
+    path("catalog/", include("apps.catalog.urls")),
     path("schema/", SpectacularAPIView.as_view(), name="api-schema"),
     path("docs/", SpectacularSwaggerView.as_view(url_name="api-schema"), name="api-docs"),
 ]

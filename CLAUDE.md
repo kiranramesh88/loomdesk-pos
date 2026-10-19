@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project state
 
-LoomDesk is a POS (point-of-sale) system for a textile/retail store, built as an interview assignment. Work follows the phases in `docs/frontend_implementation_plan.md`. **Phases 0–2 are done.** Phase 0 covers the Django project and models, session login, the typed API client, the router with role guards, and the login page. Phase 1 covers the shared design system in `frontend/src/components/`. Phase 2 covers the admin shell in `frontend/src/layouts/admin/`. Each admin module renders `AdminPlaceholderPage` until its phase replaces it, and billing and mobile admin still render `ScaffoldPage`. In dev builds, `/dev/ui` shows every shared component in every state.
+LoomDesk is a POS (point-of-sale) system for a textile/retail store, built as an interview assignment. Work follows the phases in `docs/frontend_implementation_plan.md`. **Phases 0–3 are done** (Phase 3 is Products, renumbered ahead of Billing; see the plan's §9). Phase 0 covers the Django project and models, session login, the typed API client, the router with role guards, and the login page. Phase 1 covers the shared design system in `frontend/src/components/`. Phase 2 covers the admin shell in `frontend/src/layouts/admin/`. Phase 3 covers the Products module (`apps/catalog` API, `features/products`). Each other admin module renders `AdminPlaceholderPage` until its phase adds an entry to `MODULE_ROUTES` in `app/router.tsx`, and billing and mobile admin still render `ScaffoldPage`. In dev builds, `/dev/ui` shows every shared component in every state.
 
 ## Commands
 
@@ -56,6 +56,7 @@ npm run build
 - **SPA serving:** the production build uses `base: '/static/'`, and `STATICFILES_DIRS` points at `frontend/dist`, so Django serves the hashed assets as static files. The SPA fallback only returns `index.html`. `config/tests.py` guards this, and `pytest.ini` includes `config` in its test paths.
 - **Error envelope:** every API error has the shape `{detail, code, fields}` (`config/exceptions.py`). The frontend depends on it.
 - **Money and rates:** money is always **integer paise** (`*_paise` fields), and tax rates are **basis points** (`*_bp`, so 500 = 5%).
+- **Catalogue API:** `/api/v1/catalog/` (`products/`, `categories/`, `tax-rules/`) is admin-only. Products have a unique style `sku` and are deactivated (`status=inactive`), never deleted. A product save replaces its variant list atomically, and nested errors come back as dotted paths (`variants.2.sku`) that map onto react-hook-form names.
 - **Stock:** `Variant` is the stock-tracked unit. `Variant.on_hand` changes **only** through `apps/inventory/services.record_movement()`, which locks the row and writes a `StockMovement`. Never assign `on_hand` directly.
 - **Tax:** `TaxRule.rate_bp_for(unit_taxable_paise)` handles flat rules and the GST price-band rule (5% up to ₹2,500 per unit after discount, 18% above). The rule comes from `Product.tax_rule` if set, otherwise from the category.
 - **Store settings:** `StoreSettings` is a single row (`StoreSettings.load()`). It holds `prices_include_tax` and `cashier_discount_limit_pct` (default 10%). Discounts above that limit need a Senior cashier's or Admin's approval PIN (`User.set_approval_pin` / `check_approval_pin`).

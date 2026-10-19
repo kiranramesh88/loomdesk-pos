@@ -68,12 +68,12 @@ describe('access', () => {
 describe('navigation, titles and nested routes', () => {
   it('highlights the section of a nested route and titles the page from the same config', async () => {
     mockApi()
-    renderRoutes(routes, '/admin/products/12')
+    renderRoutes(routes, '/admin/suppliers/12')
     const nav = await adminNav()
-    expect(await screen.findByRole('heading', { level: 1, name: 'Products' })).toBeInTheDocument()
-    expect(within(nav).getByRole('link', { name: 'Products' })).toHaveAttribute('aria-current', 'page')
+    expect(await screen.findByRole('heading', { level: 1, name: 'Suppliers' })).toBeInTheDocument()
+    expect(within(nav).getByRole('link', { name: 'Suppliers' })).toHaveAttribute('aria-current', 'page')
     expect(within(nav).getByRole('link', { name: 'Overview' })).not.toHaveAttribute('aria-current')
-    expect(document.title).toBe('Products · LoomDesk')
+    expect(document.title).toBe('Suppliers · LoomDesk')
     // Exactly one h1: the topbar's section name is plain text.
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
   })

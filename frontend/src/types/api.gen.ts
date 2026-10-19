@@ -91,6 +91,93 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/catalog/categories/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Categories with their HSN code and tax rule, for the product form and catalogue filter. */
+        get: operations["catalog_categories_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/products/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Admin catalogue. Products are deactivated, never deleted, so sales and stock history keep their links. */
+        get: operations["catalog_products_list"];
+        put?: never;
+        /** @description Admin catalogue. Products are deactivated, never deleted, so sales and stock history keep their links. */
+        post: operations["catalog_products_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/products/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Admin catalogue. Products are deactivated, never deleted, so sales and stock history keep their links. */
+        get: operations["catalog_products_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description Admin catalogue. Products are deactivated, never deleted, so sales and stock history keep their links. */
+        patch: operations["catalog_products_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/catalog/products/{id}/image/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Admin catalogue. Products are deactivated, never deleted, so sales and stock history keep their links. */
+        post: operations["catalog_products_image_create"];
+        /** @description Admin catalogue. Products are deactivated, never deleted, so sales and stock history keep their links. */
+        delete: operations["catalog_products_image_destroy"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/tax-rules/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["catalog_tax_rules_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/store/": {
         parameters: {
             query?: never;
@@ -112,6 +199,16 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        Category: {
+            readonly id: number;
+            readonly name: string;
+            readonly hsn_code: string;
+            readonly tax_rule: components["schemas"]["TaxRule"];
+        };
+        CategoryRef: {
+            readonly id: number;
+            readonly name: string;
+        };
         LoginRequest: {
             /** Format: email */
             email: string;
@@ -129,10 +226,109 @@ export interface components {
             readonly role: components["schemas"]["RoleEnum"];
             readonly permissions: components["schemas"]["Permissions"];
         };
+        PaginatedProductListList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["ProductList"][];
+        };
+        /**
+         * @description Create or update a product and its variants in one atomic request.
+         *
+         *     Stock is never edited here. New variants may carry opening stock, which is recorded as an
+         *     OPENING movement through inventory.services.record_movement (the only path that changes stock).
+         */
+        PatchedProductWriteRequest: {
+            name?: string;
+            sku?: string;
+            description?: string;
+            category?: number;
+            base_price_paise?: number;
+            cost_price_paise?: number | null;
+            hsn_code?: string;
+            tax_rule?: number | null;
+            status?: components["schemas"]["ProductStatusEnum"];
+            variants?: components["schemas"]["VariantWriteRequest"][];
+        };
         Permissions: {
             can_access_admin: boolean;
             can_approve_discounts: boolean;
             can_view_costs: boolean;
+        };
+        ProductDetail: {
+            readonly id: number;
+            readonly name: string;
+            readonly sku: string;
+            readonly description: string;
+            readonly category: components["schemas"]["Category"];
+            readonly base_price_paise: number;
+            readonly cost_price_paise: number | null;
+            readonly hsn_code: string;
+            readonly effective_hsn_code: string;
+            readonly tax_rule: components["schemas"]["TaxRule"];
+            readonly effective_tax_rule: components["schemas"]["TaxRule"];
+            readonly image_url: string | null;
+            readonly status: components["schemas"]["ProductStatusEnum"];
+            readonly variants: components["schemas"]["Variant"][];
+            readonly recent_movements: components["schemas"]["StockMovement"][];
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        ProductImageRequest: {
+            /** Format: binary */
+            image: string;
+        };
+        /** @description One catalogue row. Stock figures come from queryset annotations over active variants. */
+        ProductList: {
+            readonly id: number;
+            readonly name: string;
+            readonly sku: string;
+            readonly category: components["schemas"]["CategoryRef"];
+            readonly image_url: string | null;
+            readonly base_price_paise: number;
+            readonly min_price_paise: number;
+            readonly max_price_paise: number;
+            readonly status: components["schemas"]["ProductStatusEnum"];
+            readonly variant_count: number;
+            readonly total_on_hand: number;
+            readonly stock_state: components["schemas"]["StockStateEnum"];
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description * `active` - Active
+         *     * `inactive` - Inactive
+         * @enum {string}
+         */
+        ProductStatusEnum: "active" | "inactive";
+        /**
+         * @description Create or update a product and its variants in one atomic request.
+         *
+         *     Stock is never edited here. New variants may carry opening stock, which is recorded as an
+         *     OPENING movement through inventory.services.record_movement (the only path that changes stock).
+         */
+        ProductWriteRequest: {
+            name: string;
+            sku: string;
+            description?: string;
+            category: number;
+            base_price_paise: number;
+            cost_price_paise?: number | null;
+            hsn_code?: string;
+            tax_rule?: number | null;
+            status?: components["schemas"]["ProductStatusEnum"];
+            variants?: components["schemas"]["VariantWriteRequest"][];
         };
         /**
          * @description * `admin` - Admin
@@ -144,11 +340,87 @@ export interface components {
         Session: {
             user: components["schemas"]["Me"] | null;
         };
+        StockMovement: {
+            readonly id: number;
+            readonly type: components["schemas"]["StockMovementTypeEnum"];
+            readonly type_label: string;
+            readonly variant_label: string;
+            readonly quantity_delta: number;
+            readonly balance_after: number;
+            readonly reason: string;
+            readonly reference: string;
+            readonly actor_name: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        /**
+         * @description * `opening` - Opening stock
+         *     * `purchase` - Purchase received
+         *     * `sale` - Sale
+         *     * `return` - Customer return
+         *     * `adjust_add` - Adjustment (add)
+         *     * `adjust_remove` - Adjustment (remove)
+         *     * `count` - Stock count
+         * @enum {string}
+         */
+        StockMovementTypeEnum: "opening" | "purchase" | "sale" | "return" | "adjust_add" | "adjust_remove" | "count";
+        /**
+         * @description * `in_stock` - in_stock
+         *     * `low_stock` - low_stock
+         *     * `out_of_stock` - out_of_stock
+         * @enum {string}
+         */
+        StockStateEnum: "in_stock" | "low_stock" | "out_of_stock";
         /** @description Identity shown in the admin shell. Settings such as tax and discount limits are not exposed here. */
         Store: {
             readonly name: string;
             readonly code: string;
             readonly state: string;
+        };
+        TaxRule: {
+            readonly id: number;
+            readonly name: string;
+            readonly kind: components["schemas"]["TaxRuleKindEnum"];
+            readonly flat_rate_bp: number | null;
+            readonly threshold_paise: number | null;
+            readonly lower_rate_bp: number | null;
+            readonly upper_rate_bp: number | null;
+            /** @description Plain-language rate, e.g. "5% up to ₹2,500 per unit, 18% above". */
+            readonly summary: string;
+        };
+        /**
+         * @description * `flat` - Flat rate
+         *     * `price_band` - Price band
+         * @enum {string}
+         */
+        TaxRuleKindEnum: "flat" | "price_band";
+        Variant: {
+            readonly id: number;
+            readonly size: string;
+            readonly colour: string;
+            readonly sku: string;
+            readonly barcode: string | null;
+            readonly price_override_paise: number | null;
+            readonly price_paise: number;
+            readonly on_hand: number;
+            readonly reorder_level: number;
+            readonly is_active: boolean;
+            readonly stock_state: components["schemas"]["StockStateEnum"];
+            readonly has_history: boolean;
+        };
+        VariantWriteRequest: {
+            id?: number;
+            size: string;
+            colour: string;
+            sku: string;
+            barcode?: string | null;
+            price_override_paise?: number | null;
+            /** @default 2 */
+            reorder_level: number;
+            /** @default true */
+            is_active: boolean;
+            /** @default 0 */
+            opening_stock: number;
         };
     };
     responses: never;
@@ -254,6 +526,220 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Session"];
+                };
+            };
+        };
+    };
+    catalog_categories_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Category"][];
+                };
+            };
+        };
+    };
+    catalog_products_list: {
+        parameters: {
+            query?: {
+                category?: number;
+                /**
+                 * @description Ordering
+                 *
+                 *     * `name` - Name
+                 *     * `-name` - Name (descending)
+                 *     * `sku` - Sku
+                 *     * `-sku` - Sku (descending)
+                 *     * `price` - Price
+                 *     * `-price` - Price (descending)
+                 *     * `stock` - Stock
+                 *     * `-stock` - Stock (descending)
+                 *     * `updated` - Updated
+                 *     * `-updated` - Updated (descending)
+                 */
+                ordering?: ("-name" | "-price" | "-sku" | "-stock" | "-updated" | "name" | "price" | "sku" | "stock" | "updated")[];
+                /** @description A page number within the paginated result set. */
+                page?: number;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description Name, product or variant SKU, or barcode */
+                q?: string;
+                /**
+                 * @description * `active` - Active
+                 *     * `inactive` - Inactive
+                 */
+                status?: "active" | "inactive";
+                /**
+                 * @description * `in_stock` - In stock
+                 *     * `low_stock` - Low stock
+                 *     * `out_of_stock` - Out of stock
+                 */
+                stock?: "in_stock" | "low_stock" | "out_of_stock";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedProductListList"];
+                };
+            };
+        };
+    };
+    catalog_products_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProductWriteRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProductWriteRequest"];
+                "multipart/form-data": components["schemas"]["ProductWriteRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductDetail"];
+                };
+            };
+        };
+    };
+    catalog_products_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this product. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductDetail"];
+                };
+            };
+        };
+    };
+    catalog_products_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this product. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedProductWriteRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedProductWriteRequest"];
+                "multipart/form-data": components["schemas"]["PatchedProductWriteRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductDetail"];
+                };
+            };
+        };
+    };
+    catalog_products_image_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this product. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["ProductImageRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductDetail"];
+                };
+            };
+        };
+    };
+    catalog_products_image_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this product. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductDetail"];
+                };
+            };
+        };
+    };
+    catalog_tax_rules_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxRule"][];
                 };
             };
         };
