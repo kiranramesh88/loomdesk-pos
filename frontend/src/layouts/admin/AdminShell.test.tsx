@@ -1,15 +1,19 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { configure, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { Gift } from 'lucide-react'
 import { lazy } from 'react'
 
 import { routes } from '@/app/router'
+import { AdminPlaceholderPage } from '@/features/admin/AdminPlaceholderPage'
 import { jsonResponse, ME_CASHIER, renderRoutes, sessionOf } from '@/test/render'
 
 import { AdminLayout } from './AdminLayout'
 import { AdminRouteError } from './AdminPageStates'
 
 const ME_ADMIN = { ...ME_CASHIER, id: 1, email: 'kiran@loomlinen.demo', full_name: 'Kiran Ramesh', initials: 'KR', role: 'admin' }
-const STORE = { name: 'Loom & Linen', code: 'LL-KKD-01', state: 'Kerala' }
+const STORE = { name: 'Loom & Linen', code: 'LL-KKD-01', state: 'Kerala', today: '2026-10-20' }
+
+const REPORT = { key: 'sales-summary', title: 'Sales summary', description: 'Sales by day.', uses_dates: true, period: { date_from: '2026-10-14', date_to: '2026-10-20' }, generated_at: '2026-10-20T10:00:00Z', filters: [], applied: {}, summary: [], columns: [], rows: [], trend: null, truncated: false, definitions: [] }
 
 interface ApiOptions {
   me?: unknown
@@ -29,6 +33,11 @@ function mockApi({ me = ME_ADMIN, store = () => jsonResponse(200, STORE), logout
     }
     if (url.endsWith('/catalog/tax-rules/') || url.endsWith('/catalog/categories/')) return jsonResponse(200, [])
     if (url.endsWith('/auth/logout/')) return logout()
+    // The Overview and Reports pages, opened by the navigation tests.
+    if (url.endsWith('/api/v1/reports/')) return jsonResponse(200, [{ key: 'sales-summary', title: 'Sales summary', description: 'Sales by day.', uses_dates: true }])
+    if (url.includes('/api/v1/reports/')) return jsonResponse(200, REPORT)
+    if (url.endsWith('/inventory/summary/')) return jsonResponse(200, { tracked_variants: 0, low_stock: 0, out_of_stock: 0, units_on_hand: 0 })
+    if (url.includes('/api/v1/sales/?')) return jsonResponse(200, { count: 0, next: null, previous: null, results: [] })
     throw new Error(`Unexpected request ${url}`)
   })
 }
@@ -52,6 +61,9 @@ const topbarAccountButton = () =>
 
 const adminNav = () => screen.findByRole('navigation', { name: 'Admin' })
 
+// Lazy pages (Overview, Settings, Reports) load their chunks and data; on a busy machine that passes 1s.
+configure({ asyncUtilTimeout: 5000 })
+
 afterEach(() => vi.restoreAllMocks())
 
 describe('access', () => {
@@ -73,12 +85,12 @@ describe('access', () => {
 describe('navigation, titles and nested routes', () => {
   it('highlights the section of a nested route and titles the page from the same config', async () => {
     mockApi()
-    renderRoutes(routes, '/admin/reports/12')
+    renderRoutes(routes, '/admin/reports/sales-summary')
     const nav = await adminNav()
-    expect(await screen.findByRole('heading', { level: 1, name: 'Reports' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Sales summary' })).toBeInTheDocument()
     expect(within(nav).getByRole('link', { name: 'Reports' })).toHaveAttribute('aria-current', 'page')
     expect(within(nav).getByRole('link', { name: 'Overview' })).not.toHaveAttribute('aria-current')
-    expect(document.title).toBe('Reports · LoomDesk')
+    expect(document.title).toBe('Report · LoomDesk')
     // Exactly one h1: the topbar's section name is plain text.
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
   })
@@ -104,11 +116,11 @@ describe('navigation, titles and nested routes', () => {
   })
 
   it('shows an unbuilt module as a heading plus an empty state, with no fake actions', async () => {
-    mockApi()
-    renderRoutes(routes, '/admin/reports')
-    await screen.findByRole('heading', { level: 1, name: 'Reports' })
-    expect(screen.getByText('Reports isn’t available yet')).toBeInTheDocument()
-    expect(within(screen.getByRole('main')).queryByRole('button')).not.toBeInTheDocument()
+    // Every module is built now; the placeholder stays for a module added to the nav before its pages.
+    render(<AdminPlaceholderPage item={{ path: 'loyalty', label: 'Loyalty', description: 'Points and rewards.', icon: Gift, group: 'workspace' }} />)
+    expect(screen.getByRole('heading', { level: 1, name: 'Loyalty' })).toBeInTheDocument()
+    expect(screen.getByText('Loyalty isn’t available yet')).toBeInTheDocument()
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
 
   it('renders unknown admin paths as not found inside the shell', async () => {
@@ -217,7 +229,7 @@ describe('phone navigation drawer', () => {
     await userEvent.click(within(drawer).getByRole('link', { name: 'Reports' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     expect(router.state.location.pathname).toBe('/admin/reports')
-    expect(await screen.findByRole('heading', { level: 1, name: 'Reports' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Reports & insights' })).toBeInTheDocument()
     expect(trigger).toHaveFocus()
   })
 

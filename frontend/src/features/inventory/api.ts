@@ -73,6 +73,7 @@ export function useAdjustStock() {
   const refreshStock = () => {
     // Stock shows in inventory, the admin catalogue and the till's catalogue.
     void client.invalidateQueries({ queryKey: queryKeys.inventory.all })
+    void client.invalidateQueries({ queryKey: queryKeys.reports.all })
     void client.invalidateQueries({ queryKey: queryKeys.products.all })
     void client.invalidateQueries({ queryKey: queryKeys.billing.products })
   }

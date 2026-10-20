@@ -4,7 +4,7 @@
  * - Every failure becomes an ApiError using the backend's {detail, code, fields} envelope.
  */
 
-const API_BASE = '/api/v1'
+export const API_BASE = '/api/v1'
 const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 
 export type FieldErrors = Record<string, string[]>

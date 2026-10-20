@@ -280,8 +280,9 @@ class SalesSummaryView(generics.GenericAPIView):
     """Admin summary of completed sales matching the same filters as the list.
 
     Totals are the saved bill totals (after discounts, GST included). UPI and card amounts are what the
-    cashier recorded; none is gateway-verified, so this is not a settlement figure. Returns are not
-    deducted yet because the returns module does not exist.
+    cashier recorded; none is gateway-verified, so this is not a settlement figure. Voided bills are left
+    out. Refunds aren't deducted: this summarises bills as sold, by bill date. Refunds and net sales are
+    in `/reports/sales-summary/`.
     """
 
     permission_classes = [IsAdmin]

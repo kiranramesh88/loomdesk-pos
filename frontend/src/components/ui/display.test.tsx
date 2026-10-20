@@ -56,6 +56,33 @@ describe('DataTable', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
     expect(onRetry).toHaveBeenCalledOnce()
   })
+
+  it('sorts by a column on request, keeps empty values last and leaves unsortable headers alone', async () => {
+    const columns: Column<Row & { cost: number | null }>[] = [
+      { id: 'name', header: 'Product', cell: (r) => r.name, sortValue: (r) => r.name },
+      { id: 'cost', header: 'Cost', align: 'right', cell: (r) => (r.cost === null ? '—' : String(r.cost)), sortValue: (r) => r.cost },
+      { id: 'note', header: 'Note', cell: () => '' },
+    ]
+    const rows = [
+      { id: '1', name: 'shirt 10', totalPaise: 0, cost: 500 },
+      { id: '2', name: 'Shirt 9', totalPaise: 0, cost: null },
+      { id: '3', name: 'apron', totalPaise: 0, cost: 120 },
+    ]
+    render(<DataTable caption="Costs" columns={columns} rows={rows} getRowId={(r) => r.id} empty={null} />)
+    const names = () => screen.getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell')[0]?.textContent)
+    expect(names()).toEqual(['shirt 10', 'Shirt 9', 'apron'])
+    expect(screen.getByRole('columnheader', { name: 'Note' })).not.toHaveAttribute('aria-sort')
+    await userEvent.click(screen.getByRole('button', { name: 'Product' }))
+    // Case-insensitive, with numbers in names compared as numbers.
+    expect(names()).toEqual(['apron', 'Shirt 9', 'shirt 10'])
+    const cost = screen.getByRole('columnheader', { name: 'Cost' })
+    await userEvent.click(within(cost).getByRole('button'))
+    expect(names()).toEqual(['apron', 'shirt 10', 'Shirt 9'])
+    await userEvent.click(within(cost).getByRole('button'))
+    expect(cost).toHaveAttribute('aria-sort', 'descending')
+    expect(names()).toEqual(['shirt 10', 'apron', 'Shirt 9'])
+    expect(screen.getByRole('columnheader', { name: 'Product' })).toHaveAttribute('aria-sort', 'none')
+  })
 })
 
 describe('KpiCard', () => {

@@ -71,6 +71,12 @@ export const queryKeys = {
     detail: (number: string) => ['returns', 'detail', number] as const,
     returnable: (invoiceNo: string) => ['returns', 'returnable', invoiceNo] as const,
   },
+  reports: {
+    /** Every report figure: sales, returns, voids, stock changes, staff and settings changes invalidate this prefix. */
+    all: ['reports'] as const,
+    library: ['reports', 'library'] as const,
+    report: (key: string, params: Record<string, string>) => ['reports', 'report', key, params] as const,
+  },
   staff: {
     /** Staff lists and accounts: every staff change invalidates this prefix. */
     all: ['staff'] as const,

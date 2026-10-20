@@ -52,6 +52,7 @@ export function useRefreshAfterReturn() {
   const client = useQueryClient()
   return () => {
     void client.invalidateQueries({ queryKey: queryKeys.returns.all })
+    void client.invalidateQueries({ queryKey: queryKeys.reports.all })
     void client.invalidateQueries({ queryKey: queryKeys.sales.all })
     void client.invalidateQueries({ queryKey: queryKeys.inventory.all })
     void client.invalidateQueries({ queryKey: queryKeys.products.all })

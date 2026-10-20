@@ -1,9 +1,10 @@
-import { ArrowDownRight, ArrowUpRight, type LucideIcon } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight, Info, type LucideIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 import { cx } from '@/lib/cx'
 
 import { Skeleton } from './Skeleton'
+import { Tooltip } from './Tooltip'
 
 export interface KpiTrend {
   direction: 'up' | 'down'
@@ -21,17 +22,28 @@ export interface KpiCardProps {
   footnote?: string
   trend?: KpiTrend
   isLoading?: boolean
+  /** How the figure is worked out, shown in a tooltip on an info button. Needs a TooltipProvider (AdminLayout). */
+  definition?: string
 }
 
 /** Summary figure card (prototype `.kpi-card`): label + icon, large tabular value, one footnote line. */
-export function KpiCard({ label, value, icon: Icon, footnote, trend, isLoading }: KpiCardProps) {
+export function KpiCard({ label, value, icon: Icon, footnote, trend, isLoading, definition }: KpiCardProps) {
   const favourable = trend?.favourable ?? trend?.direction === 'up'
   const TrendIcon = trend?.direction === 'down' ? ArrowDownRight : ArrowUpRight
 
   return (
     <div className="flex min-h-[118px] min-w-0 flex-col rounded-card border border-line bg-surface px-4 pt-4 pb-3.5 shadow-card sm:px-[17px]">
       <div className="flex items-start justify-between gap-3">
-        <span className="type-helper font-medium">{label}</span>
+        <span className="inline-flex items-center gap-1 type-helper font-medium">
+          {label}
+          {definition && (
+            <Tooltip content={<span className="block max-w-[240px] font-medium">{definition}</span>} side="top">
+              <button type="button" aria-label={`About ${label}`} className="-m-1 grid size-6 place-items-center rounded-control text-muted transition-control hover:text-ink-2">
+                <Info aria-hidden className="size-3.5" />
+              </button>
+            </Tooltip>
+          )}
+        </span>
         <span aria-hidden className="grid size-[33px] shrink-0 place-items-center rounded-mark bg-primary-soft text-primary">
           <Icon className="size-[18px]" />
         </span>

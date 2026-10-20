@@ -704,6 +704,131 @@ paths:
               schema:
                 $ref: '#/components/schemas/InventoryVariant'
           description: ''
+  /api/v1/reports/:
+    get:
+      operationId: reports_list
+      description: 'The reports that exist. All are admin-only: they show cost prices,
+        staff figures and refunds.'
+      tags:
+      - reports
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReportListItem'
+          description: ''
+  /api/v1/reports/{key}/:
+    get:
+      operationId: reports_retrieve
+      parameters:
+      - in: query
+        name: action
+        schema:
+          type: string
+        description: 'Activity log: an audit action'
+      - in: query
+        name: category
+        schema:
+          type: string
+        description: 'Sales by product, inventory valuation, low stock: a category
+          id'
+      - in: query
+        name: date_from
+        schema:
+          type: string
+          format: date
+        description: 'First store date (default: 30 days before date_to)'
+      - in: query
+        name: date_to
+        schema:
+          type: string
+          format: date
+        description: 'Last store date (default: today)'
+      - in: path
+        name: key
+        schema:
+          type: string
+        required: true
+      - in: query
+        name: reason
+        schema:
+          type: string
+        description: 'Returns & refunds: a return reason'
+      - in: query
+        name: state
+        schema:
+          type: string
+        description: 'Low stock: low_stock or out_of_stock'
+      tags:
+      - reports
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+          description: ''
+  /api/v1/reports/{key}/export/:
+    get:
+      operationId: reports_export_retrieve
+      description: The report's table as a CSV download, with the same dates and filters.
+      parameters:
+      - in: query
+        name: action
+        schema:
+          type: string
+        description: 'Activity log: an audit action'
+      - in: query
+        name: category
+        schema:
+          type: string
+        description: 'Sales by product, inventory valuation, low stock: a category
+          id'
+      - in: query
+        name: date_from
+        schema:
+          type: string
+          format: date
+        description: 'First store date (default: 30 days before date_to)'
+      - in: query
+        name: date_to
+        schema:
+          type: string
+          format: date
+        description: 'Last store date (default: today)'
+      - in: path
+        name: key
+        schema:
+          type: string
+        required: true
+      - in: query
+        name: reason
+        schema:
+          type: string
+        description: 'Returns & refunds: a return reason'
+      - in: query
+        name: state
+        schema:
+          type: string
+        description: 'Low stock: low_stock or out_of_stock'
+      tags:
+      - reports
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            text/csv:
+              schema:
+                type: string
+          description: ''
   /api/v1/returns/:
     get:
       operationId: returns_list
@@ -1122,8 +1247,9 @@ paths:
         Admin summary of completed sales matching the same filters as the list.
 
         Totals are the saved bill totals (after discounts, GST included). UPI and card amounts are what the
-        cashier recorded; none is gateway-verified, so this is not a settlement figure. Returns are not
-        deducted yet because the returns module does not exist.
+        cashier recorded; none is gateway-verified, so this is not a settlement figure. Voided bills are left
+        out. Refunds aren't deducted: this summarises bills as sold, by bill date. Refunds and net sales are
+        in `/reports/sales-summary/`.
       parameters:
       - in: query
         name: cashier
@@ -3586,6 +3712,201 @@ components:
           maxLength: 40
       required:
       - method
+    Report:
+      type: object
+      description: |-
+        One report. `rows` are objects keyed by the columns' keys: money in integer paise, rates in basis
+        points, dates as ISO strings. `period` is null for snapshot reports (stock).
+      properties:
+        key:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        uses_dates:
+          type: boolean
+        period:
+          allOf:
+          - $ref: '#/components/schemas/ReportPeriod'
+          nullable: true
+        generated_at:
+          type: string
+          format: date-time
+        filters:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReportFilter'
+        applied:
+          type: object
+          additionalProperties:
+            type: string
+        summary:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReportMetric'
+        columns:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReportColumn'
+        rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        trend:
+          allOf:
+          - $ref: '#/components/schemas/ReportTrend'
+          nullable: true
+        truncated:
+          type: boolean
+        definitions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReportDefinition'
+      required:
+      - applied
+      - columns
+      - definitions
+      - description
+      - filters
+      - generated_at
+      - key
+      - period
+      - rows
+      - summary
+      - title
+      - trend
+      - truncated
+      - uses_dates
+    ReportColumn:
+      type: object
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        kind:
+          $ref: '#/components/schemas/ReportColumnKindEnum'
+      required:
+      - key
+      - kind
+      - label
+    ReportColumnKindEnum:
+      enum:
+      - money
+      - count
+      - percent
+      - text
+      - date
+      - datetime
+      - reference
+      type: string
+      description: |-
+        * `money` - money
+        * `count` - count
+        * `percent` - percent
+        * `text` - text
+        * `date` - date
+        * `datetime` - datetime
+        * `reference` - reference
+    ReportDefinition:
+      type: object
+      properties:
+        term:
+          type: string
+        meaning:
+          type: string
+      required:
+      - meaning
+      - term
+    ReportFilter:
+      type: object
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        options:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReportOption'
+      required:
+      - key
+      - label
+      - options
+    ReportListItem:
+      type: object
+      properties:
+        key:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        uses_dates:
+          type: boolean
+      required:
+      - description
+      - key
+      - title
+      - uses_dates
+    ReportMetric:
+      type: object
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        value:
+          type: integer
+        kind:
+          $ref: '#/components/schemas/ReportMetricKindEnum'
+      required:
+      - key
+      - kind
+      - label
+      - value
+    ReportMetricKindEnum:
+      enum:
+      - money
+      - count
+      type: string
+      description: |-
+        * `money` - money
+        * `count` - count
+    ReportOption:
+      type: object
+      properties:
+        value:
+          type: string
+        label:
+          type: string
+      required:
+      - label
+      - value
+    ReportPeriod:
+      type: object
+      properties:
+        date_from:
+          type: string
+          format: date
+        date_to:
+          type: string
+          format: date
+      required:
+      - date_from
+      - date_to
+    ReportTrend:
+      type: object
+      properties:
+        x:
+          type: string
+        y:
+          type: string
+      required:
+      - x
+      - y
     Return:
       type: object
       properties:

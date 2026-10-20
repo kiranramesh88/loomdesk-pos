@@ -33,6 +33,7 @@ function useRefreshStaff() {
   return (member?: StaffMember) => {
     if (member) client.setQueryData(queryKeys.staff.detail(member.id), member)
     void client.invalidateQueries({ queryKey: queryKeys.staff.all })
+    void client.invalidateQueries({ queryKey: queryKeys.reports.all })
     void client.invalidateQueries({ queryKey: queryKeys.auth.me })
   }
 }

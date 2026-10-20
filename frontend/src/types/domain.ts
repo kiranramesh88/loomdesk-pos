@@ -104,3 +104,9 @@ export type SetPasswordRequest = Schemas['SetPasswordRequest']
 
 export type StoreSettings = Schemas['StoreSettings']
 export type StoreSettingsUpdate = Schemas['PatchedStoreSettingsUpdateRequest']
+
+export type ReportListItem = Schemas['ReportListItem']
+export type Report = Schemas['Report']
+export type ReportColumn = Schemas['ReportColumn']
+export type ReportMetric = Schemas['ReportMetric']
+export type ReportRow = Report['rows'][number]

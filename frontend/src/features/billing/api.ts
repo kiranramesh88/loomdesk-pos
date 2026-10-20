@@ -120,6 +120,7 @@ export function useCheckout() {
       void client.invalidateQueries({ queryKey: queryKeys.products.all })
       void client.invalidateQueries({ queryKey: queryKeys.inventory.all })
       void client.invalidateQueries({ queryKey: queryKeys.sales.history })
+      void client.invalidateQueries({ queryKey: queryKeys.reports.all })
     },
     onError: (error) => {
       // Prices, stock or availability moved since the quote: re-price the bill and refresh stock.

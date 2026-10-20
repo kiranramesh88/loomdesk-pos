@@ -365,6 +365,56 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reports/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The reports that exist. All are admin-only: they show cost prices, staff figures and refunds. */
+        get: operations["reports_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/{key}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["reports_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/{key}/export/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The report's table as a CSV download, with the same dates and filters. */
+        get: operations["reports_export_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/returns/": {
         parameters: {
             query?: never;
@@ -537,8 +587,9 @@ export interface paths {
          * @description Admin summary of completed sales matching the same filters as the list.
          *
          *     Totals are the saved bill totals (after discounts, GST included). UPI and card amounts are what the
-         *     cashier recorded; none is gateway-verified, so this is not a settlement figure. Returns are not
-         *     deducted yet because the returns module does not exist.
+         *     cashier recorded; none is gateway-verified, so this is not a settlement figure. Voided bills are left
+         *     out. Refunds aren't deducted: this summarises bills as sold, by bill date. Refunds and net sales are
+         *     in `/reports/sales-summary/`.
          */
         get: operations["sales_summary_retrieve"];
         put?: never;
@@ -1492,6 +1543,88 @@ export interface components {
         RefundInputRequest: {
             method: components["schemas"]["PaymentMethodEnum"];
             reference?: string;
+        };
+        /**
+         * @description One report. `rows` are objects keyed by the columns' keys: money in integer paise, rates in basis
+         *     points, dates as ISO strings. `period` is null for snapshot reports (stock).
+         */
+        Report: {
+            key: string;
+            title: string;
+            description: string;
+            uses_dates: boolean;
+            period: components["schemas"]["ReportPeriod"] | null;
+            /** Format: date-time */
+            generated_at: string;
+            filters: components["schemas"]["ReportFilter"][];
+            applied: {
+                [key: string]: string;
+            };
+            summary: components["schemas"]["ReportMetric"][];
+            columns: components["schemas"]["ReportColumn"][];
+            rows: {
+                [key: string]: unknown;
+            }[];
+            trend: components["schemas"]["ReportTrend"] | null;
+            truncated: boolean;
+            definitions: components["schemas"]["ReportDefinition"][];
+        };
+        ReportColumn: {
+            key: string;
+            label: string;
+            kind: components["schemas"]["ReportColumnKindEnum"];
+        };
+        /**
+         * @description * `money` - money
+         *     * `count` - count
+         *     * `percent` - percent
+         *     * `text` - text
+         *     * `date` - date
+         *     * `datetime` - datetime
+         *     * `reference` - reference
+         * @enum {string}
+         */
+        ReportColumnKindEnum: "money" | "count" | "percent" | "text" | "date" | "datetime" | "reference";
+        ReportDefinition: {
+            term: string;
+            meaning: string;
+        };
+        ReportFilter: {
+            key: string;
+            label: string;
+            options: components["schemas"]["ReportOption"][];
+        };
+        ReportListItem: {
+            key: string;
+            title: string;
+            description: string;
+            uses_dates: boolean;
+        };
+        ReportMetric: {
+            key: string;
+            label: string;
+            value: number;
+            kind: components["schemas"]["ReportMetricKindEnum"];
+        };
+        /**
+         * @description * `money` - money
+         *     * `count` - count
+         * @enum {string}
+         */
+        ReportMetricKindEnum: "money" | "count";
+        ReportOption: {
+            value: string;
+            label: string;
+        };
+        ReportPeriod: {
+            /** Format: date */
+            date_from: string;
+            /** Format: date */
+            date_to: string;
+        };
+        ReportTrend: {
+            x: string;
+            y: string;
         };
         Return: {
             readonly number: string;
@@ -2663,6 +2796,93 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InventoryVariant"];
+                };
+            };
+        };
+    };
+    reports_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportListItem"][];
+                };
+            };
+        };
+    };
+    reports_retrieve: {
+        parameters: {
+            query?: {
+                /** @description Activity log: an audit action */
+                action?: string;
+                /** @description Sales by product, inventory valuation, low stock: a category id */
+                category?: string;
+                /** @description First store date (default: 30 days before date_to) */
+                date_from?: string;
+                /** @description Last store date (default: today) */
+                date_to?: string;
+                /** @description Returns & refunds: a return reason */
+                reason?: string;
+                /** @description Low stock: low_stock or out_of_stock */
+                state?: string;
+            };
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Report"];
+                };
+            };
+        };
+    };
+    reports_export_retrieve: {
+        parameters: {
+            query?: {
+                /** @description Activity log: an audit action */
+                action?: string;
+                /** @description Sales by product, inventory valuation, low stock: a category id */
+                category?: string;
+                /** @description First store date (default: 30 days before date_to) */
+                date_from?: string;
+                /** @description Last store date (default: today) */
+                date_to?: string;
+                /** @description Returns & refunds: a return reason */
+                reason?: string;
+                /** @description Low stock: low_stock or out_of_stock */
+                state?: string;
+            };
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
                 };
             };
         };

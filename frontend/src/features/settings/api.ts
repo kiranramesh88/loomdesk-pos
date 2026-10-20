@@ -28,6 +28,7 @@ export function useUpdateStoreSettings() {
       void client.invalidateQueries({ queryKey: queryKeys.store.detail, exact: true })
       void client.invalidateQueries({ queryKey: queryKeys.billing.settings })
       void client.invalidateQueries({ queryKey: queryKeys.billing.quotes })
+      void client.invalidateQueries({ queryKey: queryKeys.reports.all })
     },
   })
 }

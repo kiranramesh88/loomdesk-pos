@@ -15,6 +15,8 @@ import { supplierRoutes } from '@/features/suppliers/routes'
 import { returnRoutes } from '@/features/returns/routes'
 import { staffRoutes } from '@/features/staff/routes'
 import { settingsRoutes } from '@/features/settings/routes'
+import { reportRoutes } from '@/features/reports/routes'
+import { overviewRoutes } from '@/features/overview/routes'
 import { mobileRoutes } from '@/layouts/mobile/mobileRoutes'
 import { ALL_ROLES } from '@/types/domain'
 
@@ -39,6 +41,7 @@ const devRoutes: RouteObject[] = import.meta.env.DEV
 
 // Built modules supply their own child routes; the rest show a placeholder until their phase.
 const MODULE_ROUTES: Partial<Record<string, RouteObject[]>> = {
+  '': overviewRoutes,
   products: productRoutes,
   transactions: transactionRoutes,
   inventory: inventoryRoutes,
@@ -46,6 +49,7 @@ const MODULE_ROUTES: Partial<Record<string, RouteObject[]>> = {
   returns: returnRoutes,
   staff: staffRoutes,
   settings: settingsRoutes,
+  reports: reportRoutes,
 }
 
 // One route per nav item, so titles, active links and nested paths come from the same config.
@@ -54,7 +58,8 @@ const adminRoutes: RouteObject[] = [
   ...ADMIN_NAV.map((item): RouteObject => {
     const handle: AdminRouteHandle = { title: item.label }
     const children = MODULE_ROUTES[item.path]
-    if (children) return { path: item.path, handle, children }
+    // Overview ('') is a pathless parent, so /admin itself renders its index route.
+    if (children) return item.path ? { path: item.path, handle, children } : { handle, children }
     const element = <AdminPlaceholderPage item={item} />
     return item.path ? { path: `${item.path}/*`, element, handle } : { index: true, element, handle }
   }),

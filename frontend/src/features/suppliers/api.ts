@@ -165,6 +165,7 @@ export function useReceivePurchase(number: string) {
   const refresh = () => {
     void client.invalidateQueries({ queryKey: queryKeys.suppliers.all })
     void client.invalidateQueries({ queryKey: queryKeys.inventory.all })
+    void client.invalidateQueries({ queryKey: queryKeys.reports.all })
     void client.invalidateQueries({ queryKey: queryKeys.products.all })
     void client.invalidateQueries({ queryKey: queryKeys.billing.products })
   }
