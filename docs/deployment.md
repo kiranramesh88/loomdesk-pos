@@ -140,3 +140,10 @@ waitress-serve --listen=127.0.0.1:8000 --threads=8 --trusted-proxy=127.0.0.1 \
 - **Payments** are recorded, not processed. There's no payment gateway, so nothing is verified with a bank.
 - **One database role** runs both the app and its migrations. A separate migration role would let the runtime role lose `CREATE` on the schema.
 - **TLS, backups and monitoring** belong to the host; LoomDesk ships none of them.
+- **Refunds are recorded, not paid out.** A UPI or card refund is entered with its reference after it has been made outside LoomDesk, and is labelled as not verified.
+- **Held returns** (inspection hold) change no stock. When an item passes inspection, put it back with a stock adjustment.
+- **Set-password links** are shown once to the admin who issues them, for handing over in person. LoomDesk sends no email. A lost link is replaced by issuing a new one, which invalidates the old.
+- **Voids** are only for today's bills with no returns (store date). Anything else is a return.
+- **Reports** are an operational view of LoomDesk's own records, not a GST filing or double-entry accounts. A report stops at 5,000 rows; choose fewer dates for the rest.
+- **One register.** There's no per-till setup or cash-drawer reconciliation.
+- **The audit trail** is append-only through the application. Someone with direct database access can still change it.

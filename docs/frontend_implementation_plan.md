@@ -63,7 +63,7 @@ These can't be carried over from the prototype.
 
 Each phase ends in something that can be demoed. The backend and frontend for a module ship together, following the spec's order in §10. The big change from that order is that billing comes early.
 
-> **Renumbered on 20 Oct 2026 (the user's call):** Products was built as **Phase 3**, ahead of Billing, and Billing became **Phase 4**. **Phase 5** covered Transactions and an initial sales summary only; voids and Returns are not yet scheduled. **Phase 6** is the Inventory module: stock levels, adjustments and movement history from row 4. **Phase 7** is Suppliers and Purchasing (the supplier half of row 6); Staff and Overview/Reports are not yet scheduled. **Phase 8** is the mobile admin for the modules built so far. **Phase 9** is deployment and production readiness only; row 9's accessibility and visual hardening pass is not yet scheduled. **Phase 10** is security hardening: the PIN race, the Django admin sign-in limit and a Content-Security-Policy. The table below keeps the original plan for reference; §9 logs the order actually built.
+> **Renumbered on 20 Oct 2026 (the user's call):** Products was built as **Phase 3**, ahead of Billing, and Billing became **Phase 4**. **Phase 5** covered Transactions and an initial sales summary only; voids and Returns are not yet scheduled. **Phase 6** is the Inventory module: stock levels, adjustments and movement history from row 4. **Phase 7** is Suppliers and Purchasing (the supplier half of row 6); Staff and Overview/Reports are not yet scheduled. **Phase 8** is the mobile admin for the modules built so far. **Phase 9** is deployment and production readiness only; row 9's accessibility and visual hardening pass is not yet scheduled. **Phase 10** is security hardening: the PIN race, the Django admin sign-in limit and a Content-Security-Policy. **Phase 11** completes the assignment: voids and returns, staff, settings, reports and the Overview, their mobile pages, and the accessibility and visual pass (rows 5–7 and 9, without deployment). The table below keeps the original plan for reference; §9 logs the order actually built.
 
 | Phase | Scope | Exit criteria |
 |---|---|---|
@@ -398,26 +398,28 @@ None are added until you approve them.
 | Backend: `django-filter`, `django-cors-headers` (dev only, if not proxied), `pytest-django`, `Pillow` | Filtering, image fields, tests | n/a |
 | Backend: `whitenoise` (Phase 9) | Serves the built SPA and admin assets with `DEBUG=False`, compressed and with far-future caching for hashed files, without a separate web server | A web server (nginx, Caddy) serving `STATIC_ROOT` in front of Django |
 | Backend: `waitress` (Phase 9) | A production WSGI server that runs on Windows as well as Linux; `runserver` isn't for production | Gunicorn (Linux only) |
+| `recharts` + its peer `react-is` (Phase 11, D6) | The trend chart named in this plan's stack. Lazy-loaded on the Overview and Reports only (its own ~350 kB chunk), so billing never loads it. It styles through presentation attributes and the CSSOM, so the CSP needs no change. | A hand-drawn SVG line |
+| `@axe-core/playwright` (Phase 11, D11, dev only) | Automated WCAG 2.1 A/AA checks in a real browser (`npm run check:a11y`) | Manual review only |
 
 ---
 
 ## 7. Acceptance checklists
 
 Every checklist assumes the cross-cutting checks pass:
-- [ ] Loading, empty, error (with retry) and permission-denied states all exist.
-- [ ] Only Lucide icons are used.
-- [ ] Tokens are used, with no raw hex values in components.
-- [ ] Keyboard access and visible focus work.
-- [ ] Nothing overflows horizontally at 360 px.
-- [ ] Figures come from the API.
+- [x] Loading, empty, error (with retry) and permission-denied states all exist. *Per module tests mock each state; permission-denied is the `/403` redirect plus API 403s.*
+- [x] Only Lucide icons are used. *Plus the woven brand mark.*
+- [x] Tokens are used, with no raw hex values in components. *ESLint rejects raw hex in TS/TSX.*
+- [x] Keyboard access and visible focus work. *Phase 11 browser checks: skip link, sortable headers by Enter and Space, Select and dialogs by keyboard, visible 3 px rings; axe finds no violations on 55 pages.*
+- [x] Nothing overflows horizontally at 360 px. *Every mobile route and the desktop pages at 360 px, with stress data (Phase 11).*
+- [x] Figures come from the API.
 
 ### Design system and shells
-- [ ] Manrope loads everywhere, including inputs and buttons. No fallback flash on cached loads.
-- [ ] The sidebar's active state matches the route, including nested routes (`/admin/products/12` highlights Products).
-- [ ] At ≤820 px the sidebar collapses to a rail with tooltips. At ≤560 px desktop admin hides the sidebar, and a link to `/admin/mobile/` is offered.
-- [ ] Each visual group has at most one filled primary button.
-- [ ] Dialogs trap focus, close on Esc (non-destructive dialogs only) and return focus to their trigger.
-- [ ] Cashiers can't reach `/admin/*`, either by URL or by API (403). They don't see admin links in the billing topbar.
+- [ ] Manrope loads everywhere, including inputs and buttons. No fallback flash on cached loads. *Phase 11 confirmed every visible control on 18 pages uses Manrope; the cached-load flash wasn't measured.*
+- [x] The sidebar's active state matches the route, including nested routes (`/admin/products/12` highlights Products). *AdminShell tests.*
+- [x] At ≤820 px the sidebar collapses to a rail with tooltips. At ≤560 px desktop admin hides the sidebar, and a link to `/admin/mobile/` is offered. *Browser check, Phase 11.*
+- [x] Each visual group has at most one filled primary button. *Browser check over 18 admin pages, Phase 11.*
+- [x] Dialogs trap focus, close on Esc (non-destructive dialogs only) and return focus to their trigger. *Including when Radix's timer lags (Phase 11).*
+- [x] Cashiers can't reach `/admin/*`, either by URL or by API (403). They don't see admin links in the billing topbar. *Re-checked on the production server for every Phase 11 endpoint.*
 
 ### Billing
 - [x] Search by name, SKU or barcode. A barcode scan plus Enter adds the item directly when it matches a single variant.
@@ -435,13 +437,13 @@ Every checklist assumes the cross-cutting checks pass:
 - [x] Refreshing mid-bill keeps the cart.
 
 ### Overview
-- [ ] One date range drives every date-dependent panel and is shown as a visible label.
-- [ ] The KPIs are Net sales, Bills completed, Average bill and Low-stock variants, each with a definition tooltip.
-- [ ] Comparisons appear only when comparison data exists.
-- [ ] The trend chart (Recharts) uses a single blue line with faint gridlines and has a text summary or table alternative.
-- [ ] If one panel fails, it shows its own retry state and the others still render.
-- [ ] Clicking a low-stock row opens inventory, and clicking a bill opens its transaction.
-- [ ] Before the first sale, a first-use empty state is shown.
+- [x] One date range drives every date-dependent panel and is shown as a visible label. *Last 7 store days by default, in `?from&to`.*
+- [x] The KPIs are Net sales, Bills completed, Average bill and Low-stock variants, each with a definition tooltip. *The definition is a tooltip on an info button beside each label, with a short visible footnote under the figure.*
+- [x] Comparisons appear only when comparison data exists. *No comparison is shown: there's no previous-period figure in the API yet.*
+- [x] The trend chart (Recharts) uses a single blue line with faint gridlines and has a text summary or table alternative. *Both: a sentence under the chart and a "Show as table" toggle.*
+- [x] If one panel fails, it shows its own retry state and the others still render.
+- [x] Clicking a low-stock row opens inventory, and clicking a bill opens its transaction.
+- [x] Before the first sale, a first-use empty state is shown.
 
 ### Products
 - [x] Search and the filters (category, availability, stock state) are reflected in the URL. Active filters are shown with a Clear action.
@@ -455,21 +457,21 @@ Every checklist assumes the cross-cutting checks pass:
 - [x] The summary shows tracked variant, low-stock and out-of-stock counts.
 - [x] The adjustment form has a variant, a type (add, remove or set counted), quantity and reason. A reason is required for remove and set. It previews current → resulting quantity before confirming. (Phase 6 requires a reason for every adjustment, including add.)
 - [x] Negative stock is rejected by the server.
-- [x] Every change appears in movement history with its type, delta, linked reference, actor, time and reason. Sale references link to the transaction and purchase receipts (`PUR-…`) to the purchase; returns will link once that module exists.
+- [x] Every change appears in movement history with its type, delta, linked reference, actor, time and reason. Sale references link to the transaction, purchase receipts (`PUR-…`) to the purchase, and returns (`RET-…`) to the return.
 
 ### Transactions
-- [x] Search by invoice number or customer, and filter by date, method, cashier and status. *Invoice number, date range, cashier and method are built. Customer waits for customer attach at checkout; status has only one value (Completed) until voids exist, so it has no UI filter yet (the API accepts `status`).*
+- [x] Search by invoice number or customer, and filter by date, method, cashier and status. *Invoice number, date range, cashier, method and status (completed, voided, partly returned, returned) are built. Customer search is out of scope (D7): bills show "Walk-in".*
 - [x] Amounts are right-aligned, and statuses use a consistent badge.
-- [x] The detail page uses an invoice layout: lines, discounts, tax breakdown, payments with a "manually recorded" label, and linked returns. *Linked returns wait for the Returns module.*
-- [ ] There's no edit action. Voiding requires the permission, a reason and a confirmation, and creates an audit entry. *No edit action (the API returns 405). Voiding isn't built yet.*
+- [x] The detail page uses an invoice layout: lines, discounts, tax breakdown, payments with a "manually recorded" label, and linked returns.
+- [x] There's no edit action. Voiding requires the permission, a reason and a confirmation, and creates an audit entry. *No edit action (the API returns 405). Voids are admin-only and limited to today's bills with no returns (D1, D2).*
 - [x] Reprint works from the detail page.
 
 ### Returns
-- [ ] The wizard starts from an invoice (search or scan) and shows sold, already returned and eligible quantities for each line.
-- [ ] Quantity is capped at the eligible amount, by both the UI and the server.
-- [ ] The refund is calculated by the server from the original line values. The review step shows refund amount, method and disposition before confirming.
-- [ ] Items go back into stock only for the "sellable" disposition, as a movement record.
-- [ ] The original sale isn't changed. The transaction shows a derived "Partially returned" or "Returned" state and a link to the return.
+- [x] The wizard starts from an invoice (search or scan) and shows sold, already returned and eligible quantities for each line. *Typed or scanned into one field; it also starts from the transaction page.*
+- [x] Quantity is capped at the eligible amount, by both the UI and the server. *Including simultaneous returns (PostgreSQL thread tests).*
+- [x] The refund is calculated by the server from the original line values. The review step shows refund amount, method and disposition before confirming.
+- [x] Items go back into stock only for the "sellable" disposition, as a movement record. *Damaged and inspection-hold items change no stock (D4).*
+- [x] The original sale isn't changed. The transaction shows a derived "Partially returned" or "Returned" state and a link to the return.
 
 ### Suppliers
 - [x] The list shows Name, Category, Contact, Recorded balance (labelled as such), Status and Actions. *Each row links to the profile, where the actions live.*
@@ -477,32 +479,32 @@ Every checklist assumes the cross-cutting checks pass:
 - [x] The contact form has no balance field. Balances change only through purchase and payment entries.
 
 ### Staff and access
-- [ ] The list shows Name, Email, Role, Status and Last activity (only if tracked), with an Active/Inactive filter.
-- [ ] Adding a user uses an invite or set-password flow. Passwords are never displayed.
-- [ ] Changing a role or deactivating a user takes effect in the API immediately. Deactivated users keep their history.
-- [ ] Every role-gated UI element has a matching API permission test.
+- [x] The list shows Name, Email, Role, Status and Last activity (only if tracked), with an Active/Inactive filter. *Last activity is the last sign-in.*
+- [x] Adding a user uses an invite or set-password flow. Passwords are never displayed. *A one-time link, shown once and valid 3 days, handed over in person; no email is sent (D5).*
+- [x] Changing a role or deactivating a user takes effect in the API immediately. Deactivated users keep their history. *Their open sessions stop working at once.*
+- [x] Every role-gated UI element has a matching API permission test. *For the Phase 11 modules: returns, voids, staff, settings and reports (with export and valuation) each refuse cashiers and senior cashiers in tests, and were re-checked on the production server.*
 
 ### Reports
-- [ ] The library lists only reports that are actually implemented.
-- [ ] Each report workspace has a date range, filters, a summary row, a chart only where it shows a trend, a sortable table and CSV export.
-- [ ] Gross, discounts, returns and net are defined on screen. Unconfirmed payments are excluded, and the original transaction values are used.
+- [x] The library lists only reports that are actually implemented. *Ten, from the server's registry.*
+- [x] Each report workspace has a date range, filters, a summary row, a chart only where it shows a trend, a sortable table and CSV export. *Stock reports take no dates. The table draws the first 500 rows of the chosen order, with "Show all"; the CSV has every row.*
+- [x] Gross, discounts, returns and net are defined on screen. Unconfirmed payments are excluded, and the original transaction values are used. *Every payment is recorded, not confirmed, and says so; voided bills are excluded.*
 
 ### Settings
-- [ ] Store name, code and address (printed on receipts), plus register and tax defaults. Changing them doesn't affect past invoices.
+- [x] Store name, code and address (printed on receipts), plus register and tax defaults. Changing them doesn't affect past invoices. *One register, so there are no register settings (D9). The pricing rules are editable; GST rules are shown read-only (D10).*
 
 ### Mobile admin
 - [x] `/admin/mobile/` and every sub-route work on a direct load, on refresh and with browser back.
 - [x] The bottom nav (Overview, Inventory, Bills, More) shows the active state, and More is highlighted on its child pages. Inventory replaces Products (Phase 8).
-- [ ] Every admin section is reachable from More. There are no placeholders. *Every built section is (Suppliers, Purchases, Stock movements, plus links to Products and the full admin); Returns, Staff, Reports and Settings aren't built, and More says so in text rather than showing dead links.*
+- [x] Every admin section is reachable from More. There are no placeholders. *Returns, Reports, Staff & access and Settings joined in Phase 11, read-only, with links to the full admin for changes.*
 - [x] Tables become card rows (primary label, metadata, and amount, status or action on the right).
 - [x] Forms open as full-screen pages or bottom sheets with a reachable Close or Back.
 - [x] Frequent actions are ≥44 px. Nothing overflows horizontally at 360×800 and 390×844 (Playwright).
 - [x] A slow or failing request shows a retry state, never a blank screen.
 
 ### Final visual pass
-- [ ] Radii, shadows and spacing match the §4 tokens on every page.
-- [ ] Pages are tested with long product names, ₹10,00,000+ amounts, zero transactions and 500+ rows.
-- [ ] All product photos use the same `ProductPhoto` treatment.
+- [x] Radii, shadows and spacing match the §4 tokens on every page. *Only token classes exist (the theme clears Tailwind's defaults); screenshots of every Phase 11 page were reviewed.*
+- [x] Pages are tested with long product names, ₹10,00,000+ amounts, zero transactions and 500+ rows. *Injected through Playwright, with nothing written: ₹99,99,99,999.99 figures, 110-character names, 600 and 5,000 report rows; zero transactions in unit tests.*
+- [x] All product photos use the same `ProductPhoto` treatment.
 
 ---
 
@@ -1256,3 +1258,124 @@ Scope set by the user: close the approval-PIN race, rate-limit `/django-admin/` 
 - **A directly opened photo** shows unstyled, because Chrome's image viewer styles it inline.
 - **After `collectstatic`,** the server must restart before the new build's files are served (WhiteNoise indexes at start-up).
 - **No public deployment** and no CSP report endpoint.
+
+### Phase 11: Assignment completion (done, 20 Oct 2026)
+
+Scope set by the user: returns and voids, staff management, reports, settings, the matching mobile sections, and the accessibility and visual pass. The user approved decisions D1–D12 with their defaults. There was no public deployment. The original assignment brief isn't in the repository, so §10 traces requirements to this plan and the UI specification, not to the brief.
+
+**Decisions (approved):**
+
+| # | Decision |
+|---|---|
+| D1 | Voids and returns are admin-only (API `IsAdmin`), from the admin and the transaction page, not the till. |
+| D2 | Only a bill from the current store day with no returns can be voided, with a reason and a confirmation. Anything else is a return. |
+| D3 | Refunds go by the original method or cash. UPI and card need a reference and are labelled not gateway-verified. |
+| D4 | Damaged and inspection-hold items change no stock. Held items go back later through a normal adjustment. |
+| D5 | A one-time set-password link, shown once, valid 3 days, handed over in person. No email; the admin never sees the password. |
+| D6 | Recharts, lazy-loaded on the Overview and Reports only. |
+| D7 | Attaching a customer is out of scope; bills show "Walk-in". |
+| D8 | A minimal append-only `AuditEntry`, shown as the Activity log report. |
+| D9 | One register; no Register model. |
+| D10 | GST rules are shown read-only in Settings. |
+| D11 | `@axe-core/playwright` as a dev-only dependency. |
+| D12 | One commit per sub-phase. |
+
+**Database safety:** `loomdesk` and `loomdesk_prod` were backed up (`pg_dump -Fc`, archives verified) before their schemas changed, and the target was checked before each migration. Both were migrated, never reset or reseeded. The new migrations (`accounts.0003`, `audit.0001`, `inventory.0002`, `sales.0003`, `returns.0001`) only add tables, columns and choices. `loomdesk_prod` still holds its 2 sales, 4 movements and 2 users. `db.sqlite3` is untouched.
+
+**11.1 Voids and returns (`816c8de`)**
+- **Voids:** `POST /sales/{no}/void/`. Under the sale's row lock it checks D2, marks the sale `voided` with the reason, who and when, and puts every line back through `record_movement()` (type `void`). Sale lines, totals and the payment are kept.
+- **Returns (`apps/returns`):** `Return`, `ReturnLine` and `Refund` records (`RET-000001`).
+  - `create_return()` locks the sale and its earlier returns, caps each line at sold minus returned, and works the refund out from the sale line's saved values and its share of the bill discount.
+  - Partial returns share out each line's discount and tax so the parts always add up to the line.
+  - `POST` needs an `Idempotency-Key`; a retry returns the first result, and reusing a key for a different return is refused.
+  - Only `sellable` units restock (type `return`). The sale's return state (partly returned, returned) is derived.
+- **Audit (`apps/audit`):** `AuditEntry` refuses updates and deletes through the model and queryset, and `record()` rejects credential-like details.
+- **Frontend:** the return wizard (invoice, lines, refund, review), the return list and detail, and the void dialog on the transaction page.
+- **Tests:** 36. They cover permissions, caps, refund rounding across every split (parametrised), original values after price changes, dispositions, idempotency, immutability, void rules and audit. Five PostgreSQL thread tests: simultaneous last-unit returns, partial returns, retries with one key, a void racing a return, and simultaneous voids.
+
+**11.2 Staff (`23cc963`)**
+- **API:** `/api/v1/staff/` with list, add, edit (name, email, role), deactivate, reactivate, the approval PIN and `setup-link/`.
+- **Self-protection:** admins can't change their own role or deactivate themselves, and the last active admin can't be removed. Both are checked under row locks; a PostgreSQL test has two admins demoting each other.
+- **Set-password link:** shown once and valid for 3 days. Its signature covers the password hash and the time it was issued, so using it, issuing a newer one or a password change kills it.
+  - `/auth/set-password/` is public and throttled, and it refuses the published demo password.
+  - A PostgreSQL test submits one link twice at once: one password is set.
+- **Audit:** every change is recorded, without passwords, PINs or links.
+- **Frontend:** `features/staff` (list, detail, the dialogs, the one-time link dialog) and the public `/set-password/:uid/:token` page.
+
+**11.3 Settings (`b7bd0cb`)**
+- **API:** `GET/PATCH /api/v1/store/settings/` edits the store details printed on new receipts (name, code, address, state, GSTIN with a checksum) and the pricing rules. Saves are audited.
+- **Frontend:** two forms, a confirmation when the GST-inclusive setting changes (open bills re-confirm their total), and the GST rules read-only. Saved sales keep their snapshot.
+
+**11.4 Reports and the Overview (`b472c7b`)**
+- **Reports:** ten from one registry: sales summary, sales by product, by staff, payment methods, returns & refunds, voids, tax summary, inventory valuation, low stock and the activity log.
+  - Each has the same shape: summary metrics, typed columns, rows, an optional trend and its definitions.
+  - Dates are store dates; ranges are validated (at most 366 days) and filters are checked against their options.
+  - CSV export has a BOM, rupees, and formula-like text quoted.
+  - All admin-only, including inventory valuation (it shows cost).
+- **Frontend:**
+  - DataTable gained opt-in sorting (`sortValue`, `defaultSort`, `aria-sort`, stable).
+  - KpiCard gained a `definition` tooltip.
+  - The report library and workspace, and the Overview. The trend chart is Recharts, lazy-loaded, with a text summary and a table toggle.
+  - Report queries are invalidated after every write that changes their figures.
+- **Reconciliation:** the sales-summary report matches `/sales/summary/` (dev: ₹3,003.32 over 3 bills; production: ₹2,816.10 over 2 bills).
+  - Net sales are sales of completed bills minus refunds. Voided bills are excluded.
+  - Tax summary splits GST into CGST and SGST with the odd paisa to SGST, as receipts do.
+
+**11.5 Mobile (`8a81c71`)**
+- **Pages:** returns (list and a read-only return), staff (list and a read-only account), reports (the library, and each report as stacked cards with date chips, the trend, CSV export and definitions), and settings (read-only).
+- **Navigation:** More lists every section. A bill's returns link to their mobile pages, and report references stay inside the mobile admin.
+
+**11.6 Accessibility and visual pass (`8ec5d12`, plus the row limit in the final commit)**
+- **axe (WCAG 2.1 A/AA):** `npm run check:a11y` covers 55 pages, from public, admin desktop and admin at 360 px to billing and a dialog open. It found:
+  - **Definition lists:** nested wrappers inside `<dl>` (bill totals, receipt, supplier and purchase facts). Fixed.
+  - **The chart:** hidden from assistive tech but focusable through Recharts' keyboard layer. Turned off.
+  - **Contrast:** a hint on the selected pricing choice failed AA. Now `ink-3`, with a contrast test.
+  - After the fixes, every page passes.
+- **Keyboard:** the skip link, the sortable headers (Enter and Space), the date Select, the KPI tooltips and the settings confirmation, with focus back on Save.
+  - **Lagging timers:** under load in headless Chrome, Radix's timer-based focus return didn't run and focus was left on `<body>`. Dialogs now also restore focus as their content unmounts. A test holds the timers to prove it.
+- **Stress (`page.route`, nothing stored):** ₹99,99,99,999.99 figures, long names and emails, at 360, 820 and 1440 px.
+  - KPI figures now wrap instead of spilling out of their card.
+  - 5,000 report rows took 2.8 s to draw and 3.1 s to re-sort on the production build. The workspace now draws the first 500 rows of the chosen order (sorting covers all of them), with "Show all". It draws in 1.2 s and sorts in 0.4 s.
+
+**11.7 Final validation**
+- **Frontend:** typecheck, lint and build are clean; 313 tests pass (`--maxWorkers=4`).
+- **Backend:** 502 pass on PostgreSQL, including all 12 concurrency tests. On SQLite, 490 pass and 12 are skipped (those PostgreSQL-only tests). `makemigrations --check` is clean and the schema is unchanged.
+- **Production server (Waitress, `config.settings.prod`, `loomdesk_prod`, enforced CSP; read-only, 26/26):**
+  - The Overview chart and all ten reports render.
+  - Report figures match the sales summary, and the CSV export works.
+  - The void dialog opens and cancels with no change.
+  - The mobile sections render with no overflow.
+  - A bad set-password link is refused and offers no form.
+  - A cashier gets 403 from returns, staff, reports, export, valuation, settings and void.
+  - There were no console errors and no CSP violations. Recharts needed no policy change.
+- **Browser checks on the dev server:** the mobile sections at 360 and 390 px (30/30), keyboard and stress (33/33), large tables (7/7), and the shell items left open since Phase 2 (6/6: Manrope on every control, the rail and phone sidebar, one primary button per group).
+
+**Limits:** see `docs/deployment.md` §9.
+
+---
+
+## 10. Requirements traceability
+
+The original assignment brief isn't in the repository, so this traces each requirement to where it came from: this plan (§7 and §8) and the UI specification (`docs/loomdesk_pos_ui_design_plan_v2.md`). It doesn't claim compliance with the brief itself. "Built" means implemented, tested and checked in a browser.
+
+| Requirement (source) | Status | Where | Evidence |
+|---|---|---|---|
+| Sign-in, roles, guarded routes (§2, §6.2) | Built | `apps/accounts`, `app/guards.tsx` | Permission tests per module; cashier 403s on the production server |
+| Billing with search, scan, variants, discounts, payments, receipt (§7 Billing, §8) | Built | `apps/sales`, `features/billing` | Phase 4 log; idempotent checkout tests |
+| GST price bands and discount approval (§8.1, §8.2) | Built | `apps/sales/pricing.py`, `apps/accounts/attempts.py` | Pricing tests; the PIN race test |
+| Products and variants (§7 Products) | Built | `apps/catalog`, `features/products` | Phase 3 log |
+| Inventory, adjustments, movement history (§7 Inventory) | Built | `apps/inventory`, `features/inventory` | Phase 6 log; last-unit race tests |
+| Transactions, receipts, voids (§7 Transactions) | Built | `apps/sales`, `features/transactions` | Void tests, including the race with a return |
+| Returns and refunds (§7 Returns, spec returns module) | Built | `apps/returns`, `features/returns` | 36 tests, 5 on PostgreSQL threads |
+| Suppliers, purchases, payments, derived balances (§7 Suppliers) | Built | `apps/suppliers`, `features/suppliers` | Phase 7 log |
+| Staff and access (§7 Staff) | Built | `apps/accounts/staff.py`, `features/staff` | 28 tests, 3 on PostgreSQL threads |
+| Overview (§7 Overview) | Built | `features/overview` | Overview tests; production render |
+| Reports with definitions and CSV (§7 Reports) | Built | `apps/reports`, `features/reports` | 24 backend tests; reconciliation with the sales summary |
+| Settings (§7 Settings) | Built, with one register (D9) and read-only GST rules (D10) | `apps/store`, `features/settings` | Settings tests |
+| Audit trail for sensitive actions (D8) | Built | `apps/audit` | Append-only and no-credentials tests |
+| Mobile admin, every section (§7 Mobile admin) | Built: changes limited to stock adjustments and receiving | `layouts/mobile`, `features/*/mobile` | Mobile tests; 360 and 390 px browser checks |
+| Accessibility and visual pass (§7 cross-cutting, Final visual pass) | Built | `scripts/a11y.mjs`, `tests/contrast.test.ts` | axe on 55 pages; keyboard and stress checks |
+| Production readiness and security (Phases 9–10) | Built, not deployed publicly | `config/settings/prod.py`, `config/csp.py` | `config/test_production.py`; production-server runs |
+| Customer attach at checkout (spec billing) | Not built (D7) | — | Bills show "Walk-in" |
+| Payment gateway | Not built, by design | — | Payments and refunds are recorded and labelled as not verified |
+| Public deployment | Not done, by instruction | — | `docs/deployment.md` is the guide |

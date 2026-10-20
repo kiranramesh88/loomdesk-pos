@@ -40,6 +40,8 @@ export interface DataTableProps<T> {
   skeletonRows?: number
   /** Minimum table width before the wrapper scrolls horizontally (the page itself never does). */
   minWidth?: string
+  /** Render only the first `limit` rows of the current order. Sorting still covers every row. */
+  limit?: number
   /** Initial order for sortable columns; rows keep the order given until a header is chosen. */
   defaultSort?: SortState
 }
@@ -68,6 +70,7 @@ export function DataTable<T>({
   skeletonRows = 5,
   minWidth = '640px',
   defaultSort,
+  limit,
 }: DataTableProps<T>) {
   const [sort, setSort] = useState<SortState | undefined>(defaultSort)
   const sorted = useMemo(() => {
@@ -111,7 +114,7 @@ export function DataTable<T>({
   } else if (sorted.length === 0) {
     body = fullRow(empty)
   } else {
-    body = sorted.map((row) => (
+    body = (limit === undefined ? sorted : sorted.slice(0, limit)).map((row) => (
       <tr key={getRowId(row)} className="border-b border-line-soft transition-control last:border-b-0 hover:bg-surface-muted">
         {columns.map((column) => (
           <td key={column.id} className={cx('px-4 py-3 align-middle type-body sm:px-5', ALIGN[column.align ?? 'left'])}>

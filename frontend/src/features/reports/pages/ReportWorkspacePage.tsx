@@ -1,9 +1,10 @@
 import { ArrowLeft, Download, FileQuestion } from 'lucide-react'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router'
 
 import { EmptyState } from '@/components/feedback/EmptyState'
 import { ErrorState } from '@/components/feedback/ErrorState'
+import { Button } from '@/components/ui/Button'
 import { buttonClass } from '@/components/ui/buttonStyles'
 import { ButtonLink } from '@/components/ui/ButtonLink'
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
@@ -27,6 +28,8 @@ import { addDays, rangeLabel } from '../dates'
 import { apiParams, rangeIsBackwards, readReportParams, writeReportParams, type ReportParams } from '../reportParams'
 
 const ALL = 'all'
+/** Rows drawn at first: thousands of rows take seconds to draw and to re-sort. */
+const SHOWN = 500
 
 type Row = ReportRow & { _row: number }
 
@@ -41,6 +44,10 @@ export function ReportWorkspacePage() {
   const usesDates = meta?.uses_dates ?? true
   const backwards = rangeIsBackwards(params)
   const query = apiParams(params, usesDates)
+  // "Show all" applies to one report and query; new dates or filters start at SHOWN again.
+  const view = `${reportKey}?${new URLSearchParams(query)}`
+  const [showAllFor, setShowAllFor] = useState<string>()
+  const showAll = showAllFor === view
   const report = useReport(reportKey, query, { enabled: !backwards })
   const data = report.data?.key === reportKey ? report.data : undefined
   const today = store.data?.today ?? data?.period?.date_to ?? ''
@@ -174,7 +181,7 @@ export function ReportWorkspacePage() {
               />
               {data.truncated && (
                 <div className="px-4 pb-3 sm:px-5">
-                  <InlineAlert tone="warning">Only the first 5,000 rows are shown. Choose fewer dates to see the rest.</InlineAlert>
+                  <InlineAlert tone="warning">The report stops at 5,000 rows. Choose fewer dates to see the rest.</InlineAlert>
                 </div>
               )}
               <div aria-busy={report.isPlaceholderData || undefined} className={cx(report.isPlaceholderData && 'opacity-70')}>
@@ -186,8 +193,17 @@ export function ReportWorkspacePage() {
                   getRowId={(r) => r._row}
                   empty={<EmptyState icon={<FileQuestion />} title="Nothing to show" description={usesDates ? 'Nothing was recorded in these dates.' : 'No stock matches.'} />}
                   minWidth={columns.length > 6 ? '960px' : '640px'}
+                  limit={showAll ? undefined : SHOWN}
                 />
               </div>
+              {!showAll && data.rows.length > SHOWN && (
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-soft px-4 py-3.5 sm:px-5">
+                  <p className="type-helper">
+                    Showing the first {SHOWN} of {data.rows.length.toLocaleString('en-IN')} rows, in the order chosen. The CSV has every row.
+                  </p>
+                  <Button onClick={() => setShowAllFor(view)}>Show all {data.rows.length.toLocaleString('en-IN')} rows</Button>
+                </div>
+              )}
             </Card>
             <Card aria-labelledby="definitions-heading">
               <CardHeader id="definitions-heading" title="How these figures are worked out" />

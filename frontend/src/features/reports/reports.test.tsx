@@ -185,6 +185,25 @@ describe('reports', () => {
     expect(firstCells()).toEqual(['₹1,315.25', '₹500.00', '-₹132.00'])
   })
 
+  it('draws the first 500 rows of the chosen order, and all of them on request', async () => {
+    const many = { ...LOW_STOCK, rows: Array.from({ length: 620 }, (_, i) => ({ product: `Item ${i}`, sku: `SKU-${i}`, option: 'M', on_hand: i, state: 'Low stock' })) }
+    mockApi({ handler: (url) => (url.pathname.endsWith('/reports/low-stock/') ? jsonResponse(200, many) : undefined) })
+    renderRoutes(routes, '/admin/reports/low-stock')
+    const table = await screen.findByRole('table', { name: 'Low stock' })
+    // Plain DOM queries: role queries over hundreds of rows are slow in jsdom.
+    const bodyRows = () => [...table.querySelectorAll('tbody tr')]
+    expect(bodyRows()).toHaveLength(500)
+    expect(screen.getByText('Showing the first 500 of 620 rows, in the order chosen. The CSV has every row.')).toBeInTheDocument()
+    // Sorting covers every row, not just the drawn ones.
+    const onHand = within(table).getByRole('columnheader', { name: /On hand/ })
+    await userEvent.click(within(onHand).getByRole('button', { name: /On hand/ }))
+    await userEvent.click(within(onHand).getByRole('button', { name: /On hand/ }))
+    expect(bodyRows()[0]?.textContent).toContain('Item 619')
+    await userEvent.click(screen.getByRole('button', { name: 'Show all 620 rows' }))
+    expect(bodyRows()).toHaveLength(620)
+    expect(screen.queryByRole('button', { name: /Show all/ })).not.toBeInTheDocument()
+  }, 20000)
+
   it('puts the chosen dates in the URL, the request and the export', async () => {
     const urls = mockApi()
     const { router } = renderRoutes(routes, '/admin/reports/sales-summary')
