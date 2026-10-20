@@ -38,8 +38,12 @@ const when = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', 
 /** "20 Oct 2026, 4:05 pm" in the viewer's local time. */
 export const formatWhen = (iso: string) => when.format(new Date(iso))
 
-/** Sale movements reference their invoice; it links to the saved transaction. */
-export const isInvoiceReference = (reference: string) => /^LD-\d+$/.test(reference)
+/** Where a movement's reference leads: sales to their transaction, purchase receipts to their purchase. */
+export function referencePath(reference: string): string | null {
+  if (/^LD-\d+$/.test(reference)) return `/admin/transactions/${reference}`
+  if (/^PUR-\d+$/.test(reference)) return `/admin/suppliers/purchases/${reference}`
+  return null
+}
 
 /** "Classic Cotton Shirt · M / Blue" */
 export const variantName = (v: Pick<InventoryVariant, 'size' | 'colour'> & { product: { name: string } }) =>

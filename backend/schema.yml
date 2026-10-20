@@ -897,8 +897,502 @@ paths:
               schema:
                 $ref: '#/components/schemas/Store'
           description: ''
+  /api/v1/suppliers/:
+    get:
+      operationId: suppliers_list
+      description: Suppliers with their recorded balances. Suppliers are deactivated,
+        never deleted.
+      parameters:
+      - in: query
+        name: category
+        schema:
+          type: string
+      - in: query
+        name: ordering
+        schema:
+          type: array
+          items:
+            type: string
+            enum:
+            - -balance
+            - -name
+            - balance
+            - name
+        description: |-
+          Ordering
+
+          * `name` - Name
+          * `-name` - Name (descending)
+          * `balance` - Balance
+          * `-balance` - Balance (descending)
+        explode: false
+        style: form
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: q
+        schema:
+          type: string
+        description: Name, contact, phone, email or GSTIN
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - active
+          - inactive
+        description: |-
+          * `active` - Active
+          * `inactive` - Inactive
+      tags:
+      - suppliers
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedSupplierListList'
+          description: ''
+    post:
+      operationId: suppliers_create
+      description: Suppliers with their recorded balances. Suppliers are deactivated,
+        never deleted.
+      tags:
+      - suppliers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SupplierWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SupplierWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SupplierWriteRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupplierDetail'
+          description: ''
+  /api/v1/suppliers/{id}/:
+    get:
+      operationId: suppliers_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - suppliers
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupplierDetail'
+          description: ''
+    patch:
+      operationId: suppliers_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - suppliers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedSupplierWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedSupplierWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedSupplierWriteRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupplierDetail'
+          description: ''
+  /api/v1/suppliers/{id}/payments/:
+    get:
+      operationId: suppliers_payments_list
+      description: 'GET: payments recorded for this supplier. POST: record one. These
+        are staff entries, not verified settlements.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      tags:
+      - suppliers
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedSupplierPaymentList'
+          description: ''
+    post:
+      operationId: suppliers_payments_create
+      description: 'GET: payments recorded for this supplier. POST: record one. These
+        are staff entries, not verified settlements.'
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: UUID made when the form opens. Retrying with the same key returns
+          the first record instead of adding another.
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - suppliers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SupplierPaymentWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SupplierPaymentWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SupplierPaymentWriteRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupplierPayment'
+          description: ''
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupplierPayment'
+          description: ''
+  /api/v1/suppliers/{id}/purchases/:
+    get:
+      operationId: suppliers_purchases_list
+      description: 'GET: this supplier''s purchases, newest first. POST: record a
+        purchase (stock is unchanged until received).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - cancelled
+          - ordered
+          - received
+        description: |-
+          * `ordered` - Awaiting goods
+          * `received` - Received
+          * `cancelled` - Cancelled
+      tags:
+      - suppliers
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPurchaseListItemList'
+          description: ''
+    post:
+      operationId: suppliers_purchases_create
+      description: Record a purchase. 201 when written; 200 when the same Idempotency-Key
+        was already used for it.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: UUID made when the form opens. Retrying with the same key returns
+          the first record instead of adding another.
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - suppliers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PurchaseWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PurchaseWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PurchaseWriteRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Purchase'
+          description: ''
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Purchase'
+          description: ''
+  /api/v1/suppliers/{id}/statement/:
+    get:
+      operationId: suppliers_statement_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - suppliers
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupplierStatement'
+          description: ''
+  /api/v1/suppliers/categories/:
+    get:
+      operationId: suppliers_categories_retrieve
+      tags:
+      - suppliers
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+          description: ''
+  /api/v1/suppliers/purchases/{number}/:
+    get:
+      operationId: suppliers_purchases_retrieve
+      parameters:
+      - in: path
+        name: number
+        schema:
+          type: string
+        required: true
+      tags:
+      - suppliers
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Purchase'
+          description: ''
+    put:
+      operationId: suppliers_purchases_update
+      parameters:
+      - in: path
+        name: number
+        schema:
+          type: string
+        required: true
+      tags:
+      - suppliers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PurchaseWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PurchaseWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PurchaseWriteRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Purchase'
+          description: ''
+  /api/v1/suppliers/purchases/{number}/cancel/:
+    post:
+      operationId: suppliers_purchases_cancel_create
+      parameters:
+      - in: path
+        name: number
+        schema:
+          type: string
+        required: true
+      tags:
+      - suppliers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelPurchaseRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CancelPurchaseRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CancelPurchaseRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Purchase'
+          description: ''
+  /api/v1/suppliers/purchases/{number}/receive/:
+    post:
+      operationId: suppliers_purchases_receive_create
+      description: 'Receive the goods: every line is added to stock once, as purchase
+        movements referencing this purchase.'
+      parameters:
+      - in: path
+        name: number
+        schema:
+          type: string
+        required: true
+      tags:
+      - suppliers
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Purchase'
+          description: ''
+  /api/v1/suppliers/purchases/quote/:
+    post:
+      operationId: suppliers_purchases_quote_create
+      description: Price purchase lines without saving, so the form shows the server's
+        own totals.
+      tags:
+      - suppliers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PurchaseLinesRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PurchaseLinesRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PurchaseLinesRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchaseQuote'
+          description: ''
 components:
   schemas:
+    ActiveStatusEnum:
+      enum:
+      - active
+      - inactive
+      type: string
+      description: |-
+        * `active` - Active
+        * `inactive` - Inactive
     Approver:
       type: object
       properties:
@@ -972,6 +1466,15 @@ components:
       - prices_include_tax
       - store_code
       - store_name
+    CancelPurchaseRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 200
+      required:
+      - reason
     CashierSummary:
       type: object
       properties:
@@ -1403,6 +1906,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ProductList'
+    PaginatedPurchaseListItemList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/PurchaseListItem'
     PaginatedSaleListItemList:
       type: object
       required:
@@ -1449,6 +1975,52 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SellableProduct'
+    PaginatedSupplierListList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/SupplierList'
+    PaginatedSupplierPaymentList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/SupplierPayment'
     PatchedProductWriteRequest:
       type: object
       description: |-
@@ -1485,11 +2057,49 @@ components:
           type: integer
           nullable: true
         status:
-          $ref: '#/components/schemas/ProductStatusEnum'
+          $ref: '#/components/schemas/ActiveStatusEnum'
         variants:
           type: array
           items:
             $ref: '#/components/schemas/VariantWriteRequest'
+    PatchedSupplierWriteRequest:
+      type: object
+      description: Contact and business details only. Balances change through purchases
+        and payments, never here.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        category:
+          type: string
+          minLength: 1
+          maxLength: 60
+        contact_name:
+          type: string
+          maxLength: 120
+        phone:
+          type: string
+          maxLength: 20
+        email:
+          oneOf:
+          - type: string
+            format: email
+            maxLength: 254
+          - type: string
+            maxLength: 0
+        gstin:
+          type: string
+          maxLength: 15
+        address:
+          type: string
+        state:
+          type: string
+          maxLength: 60
+        notes:
+          type: string
+        status:
+          $ref: '#/components/schemas/ActiveStatusEnum'
     Payment:
       type: object
       properties:
@@ -1563,6 +2173,31 @@ components:
       - can_access_admin
       - can_approve_discounts
       - can_view_costs
+    PricedLine:
+      type: object
+      properties:
+        variant:
+          type: integer
+        quantity:
+          type: integer
+        unit_cost_paise:
+          type: integer
+        tax_rate_bp:
+          type: integer
+        subtotal_paise:
+          type: integer
+        tax_paise:
+          type: integer
+        total_paise:
+          type: integer
+      required:
+      - quantity
+      - subtotal_paise
+      - tax_paise
+      - tax_rate_bp
+      - total_paise
+      - unit_cost_paise
+      - variant
     ProductDetail:
       type: object
       properties:
@@ -1609,7 +2244,7 @@ components:
           readOnly: true
         status:
           allOf:
-          - $ref: '#/components/schemas/ProductStatusEnum'
+          - $ref: '#/components/schemas/ActiveStatusEnum'
           readOnly: true
         variants:
           type: array
@@ -1688,7 +2323,7 @@ components:
           readOnly: true
         status:
           allOf:
-          - $ref: '#/components/schemas/ProductStatusEnum'
+          - $ref: '#/components/schemas/ActiveStatusEnum'
           readOnly: true
         variant_count:
           type: integer
@@ -1718,14 +2353,6 @@ components:
       - total_on_hand
       - updated_at
       - variant_count
-    ProductStatusEnum:
-      enum:
-      - active
-      - inactive
-      type: string
-      description: |-
-        * `active` - Active
-        * `inactive` - Inactive
     ProductWriteRequest:
       type: object
       description: |-
@@ -1762,7 +2389,7 @@ components:
           type: integer
           nullable: true
         status:
-          $ref: '#/components/schemas/ProductStatusEnum'
+          $ref: '#/components/schemas/ActiveStatusEnum'
         variants:
           type: array
           items:
@@ -1772,6 +2399,296 @@ components:
       - category
       - name
       - sku
+    Purchase:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        number:
+          type: string
+          readOnly: true
+        supplier:
+          type: integer
+          readOnly: true
+        supplier_name:
+          type: string
+          readOnly: true
+        supplier_status:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/PurchaseStatusEnum'
+          readOnly: true
+        supplier_invoice_no:
+          type: string
+          readOnly: true
+        purchase_date:
+          type: string
+          format: date
+          readOnly: true
+        notes:
+          type: string
+          readOnly: true
+        subtotal_paise:
+          type: integer
+          readOnly: true
+        tax_paise:
+          type: integer
+          readOnly: true
+        total_paise:
+          type: integer
+          readOnly: true
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/PurchaseLine'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        created_by_name:
+          type: string
+          nullable: true
+          readOnly: true
+        received_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        received_by_name:
+          type: string
+          nullable: true
+          readOnly: true
+        cancelled_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        cancelled_by_name:
+          type: string
+          nullable: true
+          readOnly: true
+        cancel_reason:
+          type: string
+          readOnly: true
+      required:
+      - cancel_reason
+      - cancelled_at
+      - cancelled_by_name
+      - created_at
+      - created_by_name
+      - id
+      - lines
+      - notes
+      - number
+      - purchase_date
+      - received_at
+      - received_by_name
+      - status
+      - subtotal_paise
+      - supplier
+      - supplier_invoice_no
+      - supplier_name
+      - supplier_status
+      - tax_paise
+      - total_paise
+    PurchaseLine:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        variant:
+          type: integer
+          readOnly: true
+        product_id:
+          type: integer
+          readOnly: true
+        product_name:
+          type: string
+          readOnly: true
+        variant_sku:
+          type: string
+          readOnly: true
+        size:
+          type: string
+          readOnly: true
+        colour:
+          type: string
+          readOnly: true
+        quantity:
+          type: integer
+          readOnly: true
+        unit_cost_paise:
+          type: integer
+          readOnly: true
+        tax_rate_bp:
+          type: integer
+          readOnly: true
+        subtotal_paise:
+          type: integer
+          readOnly: true
+        tax_paise:
+          type: integer
+          readOnly: true
+        total_paise:
+          type: integer
+          readOnly: true
+      required:
+      - colour
+      - id
+      - product_id
+      - product_name
+      - quantity
+      - size
+      - subtotal_paise
+      - tax_paise
+      - tax_rate_bp
+      - total_paise
+      - unit_cost_paise
+      - variant
+      - variant_sku
+    PurchaseLineInputRequest:
+      type: object
+      properties:
+        variant:
+          type: integer
+        quantity:
+          type: integer
+          maximum: 10000
+          minimum: 1
+        unit_cost_paise:
+          type: integer
+          maximum: 100000000
+          minimum: 1
+          description: Cost per unit before GST.
+        tax_rate_bp:
+          nullable: true
+          description: |-
+            GST on the supplier's invoice. Leave out to use the product's GST rule at this unit cost.
+
+            * `0` - 0
+            * `500` - 500
+            * `1200` - 1200
+            * `1800` - 1800
+            * `2800` - 2800
+            * `4000` - 4000
+          oneOf:
+          - $ref: '#/components/schemas/TaxRateBpEnum'
+          - $ref: '#/components/schemas/NullEnum'
+      required:
+      - quantity
+      - unit_cost_paise
+      - variant
+    PurchaseLinesRequest:
+      type: object
+      properties:
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/PurchaseLineInputRequest'
+      required:
+      - lines
+    PurchaseListItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        number:
+          type: string
+          readOnly: true
+        supplier:
+          type: integer
+          readOnly: true
+        supplier_name:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/PurchaseStatusEnum'
+          readOnly: true
+        supplier_invoice_no:
+          type: string
+          readOnly: true
+        purchase_date:
+          type: string
+          format: date
+          readOnly: true
+        item_count:
+          type: integer
+          readOnly: true
+          description: Units on the purchase.
+        total_paise:
+          type: integer
+          readOnly: true
+        received_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+      required:
+      - id
+      - item_count
+      - number
+      - purchase_date
+      - received_at
+      - status
+      - supplier
+      - supplier_invoice_no
+      - supplier_name
+      - total_paise
+    PurchaseQuote:
+      type: object
+      properties:
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/PricedLine'
+        subtotal_paise:
+          type: integer
+        tax_paise:
+          type: integer
+        total_paise:
+          type: integer
+      required:
+      - lines
+      - subtotal_paise
+      - tax_paise
+      - total_paise
+    PurchaseStatusEnum:
+      enum:
+      - ordered
+      - received
+      - cancelled
+      type: string
+      description: |-
+        * `ordered` - Awaiting goods
+        * `received` - Received
+        * `cancelled` - Cancelled
+    PurchaseWriteRequest:
+      type: object
+      properties:
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/PurchaseLineInputRequest'
+        supplier_invoice_no:
+          type: string
+          maxLength: 40
+        purchase_date:
+          type: string
+          format: date
+          description: The supplier invoice date.
+        notes:
+          type: string
+          maxLength: 1000
+      required:
+      - lines
+      - purchase_date
     Quote:
       type: object
       properties:
@@ -2222,6 +3139,43 @@ components:
           nullable: true
       required:
       - user
+    StatementEntry:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        kind:
+          $ref: '#/components/schemas/StatementEntryKindEnum'
+        reference:
+          type: string
+        detail:
+          type: string
+        debit_paise:
+          type: integer
+          description: Owed for goods received.
+        credit_paise:
+          type: integer
+          description: Paid, as recorded by staff.
+        balance_paise:
+          type: integer
+          description: Running recorded balance after this entry.
+      required:
+      - balance_paise
+      - credit_paise
+      - date
+      - debit_paise
+      - detail
+      - kind
+      - reference
+    StatementEntryKindEnum:
+      enum:
+      - purchase
+      - payment
+      type: string
+      description: |-
+        * `purchase` - Purchase received
+        * `payment` - Payment recorded
     StockAdjustmentKindEnum:
       enum:
       - add
@@ -2362,6 +3316,270 @@ components:
       - code
       - name
       - state
+    SupplierDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        category:
+          type: string
+          readOnly: true
+        contact_name:
+          type: string
+          readOnly: true
+        phone:
+          type: string
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+        gstin:
+          type: string
+          readOnly: true
+        address:
+          type: string
+          readOnly: true
+        state:
+          type: string
+          readOnly: true
+        notes:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/ActiveStatusEnum'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        received_paise:
+          type: integer
+          readOnly: true
+          description: Received purchases, GST included.
+        awaiting_paise:
+          type: integer
+          readOnly: true
+          description: Purchases recorded but not yet received.
+        paid_paise:
+          type: integer
+          readOnly: true
+          description: Payments recorded by staff.
+        balance_paise:
+          type: integer
+          readOnly: true
+          description: 'Recorded balance: received purchases minus recorded payments.
+            Negative is an advance.'
+      required:
+      - address
+      - awaiting_paise
+      - balance_paise
+      - category
+      - contact_name
+      - created_at
+      - email
+      - gstin
+      - id
+      - name
+      - notes
+      - paid_paise
+      - phone
+      - received_paise
+      - state
+      - status
+      - updated_at
+    SupplierList:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        category:
+          type: string
+          readOnly: true
+        contact_name:
+          type: string
+          readOnly: true
+        phone:
+          type: string
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/ActiveStatusEnum'
+          readOnly: true
+        received_paise:
+          type: integer
+          readOnly: true
+          description: Received purchases, GST included.
+        paid_paise:
+          type: integer
+          readOnly: true
+          description: Payments recorded by staff.
+        balance_paise:
+          type: integer
+          readOnly: true
+          description: 'Recorded balance: received purchases minus recorded payments.
+            Negative is an advance.'
+      required:
+      - balance_paise
+      - category
+      - contact_name
+      - email
+      - id
+      - name
+      - paid_paise
+      - phone
+      - received_paise
+      - status
+    SupplierPayment:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        paid_on:
+          type: string
+          format: date
+          readOnly: true
+        amount_paise:
+          type: integer
+          readOnly: true
+        method:
+          allOf:
+          - $ref: '#/components/schemas/SupplierPaymentMethodEnum'
+          readOnly: true
+        reference:
+          type: string
+          readOnly: true
+        notes:
+          type: string
+          readOnly: true
+        recorded_by_name:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        gateway_verified:
+          type: boolean
+          readOnly: true
+          default: false
+          description: 'Always false: entered by staff.'
+      required:
+      - amount_paise
+      - created_at
+      - gateway_verified
+      - id
+      - method
+      - notes
+      - paid_on
+      - recorded_by_name
+      - reference
+    SupplierPaymentMethodEnum:
+      enum:
+      - bank_transfer
+      - upi
+      - cheque
+      - cash
+      type: string
+      description: |-
+        * `bank_transfer` - Bank transfer
+        * `upi` - UPI
+        * `cheque` - Cheque
+        * `cash` - Cash
+    SupplierPaymentWriteRequest:
+      type: object
+      properties:
+        paid_on:
+          type: string
+          format: date
+        amount_paise:
+          type: integer
+          maximum: 10000000000
+          minimum: 1
+          format: int64
+        method:
+          $ref: '#/components/schemas/SupplierPaymentMethodEnum'
+        reference:
+          type: string
+          maxLength: 60
+        notes:
+          type: string
+          maxLength: 200
+      required:
+      - amount_paise
+      - method
+      - paid_on
+    SupplierStatement:
+      type: object
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/StatementEntry'
+        balance_paise:
+          type: integer
+      required:
+      - balance_paise
+      - entries
+    SupplierWriteRequest:
+      type: object
+      description: Contact and business details only. Balances change through purchases
+        and payments, never here.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        category:
+          type: string
+          minLength: 1
+          maxLength: 60
+        contact_name:
+          type: string
+          maxLength: 120
+        phone:
+          type: string
+          maxLength: 20
+        email:
+          oneOf:
+          - type: string
+            format: email
+            maxLength: 254
+          - type: string
+            maxLength: 0
+        gstin:
+          type: string
+          maxLength: 15
+        address:
+          type: string
+        state:
+          type: string
+          maxLength: 60
+        notes:
+          type: string
+        status:
+          $ref: '#/components/schemas/ActiveStatusEnum'
+      required:
+      - category
+      - name
     TaxBreakdown:
       type: object
       properties:
@@ -2381,6 +3599,22 @@ components:
       - sgst_paise
       - tax_paise
       - taxable_paise
+    TaxRateBpEnum:
+      enum:
+      - 0
+      - 500
+      - 1200
+      - 1800
+      - 2800
+      - 4000
+      type: integer
+      description: |-
+        * `0` - 0
+        * `500` - 500
+        * `1200` - 1200
+        * `1800` - 1800
+        * `2800` - 2800
+        * `4000` - 4000
     TaxRule:
       type: object
       properties:

@@ -30,14 +30,14 @@ export interface AdminNavItem {
  * page titles, so the label you click, the highlighted item and the title always agree.
  */
 export const ADMIN_NAV: readonly AdminNavItem[] = [
-  { path: '', label: 'Overview', description: 'Today’s sales, bills and stock at a glance.', icon: LayoutDashboard, group: 'workspace', phase: 7 },
+  { path: '', label: 'Overview', description: 'Today’s sales, bills and stock at a glance.', icon: LayoutDashboard, group: 'workspace' },
   { path: 'products', label: 'Products', description: 'Catalogue, variants, prices and photos.', icon: Tag, group: 'workspace', phase: 3 },
   { path: 'inventory', label: 'Inventory', description: 'Stock levels, adjustments and movement history.', icon: Boxes, group: 'workspace', phase: 6 },
   { path: 'transactions', label: 'Transactions', description: 'Completed bills, payments and receipt reprints.', icon: ReceiptText, group: 'workspace', phase: 5 },
   { path: 'returns', label: 'Returns', description: 'Returned items, refunds and restocking.', icon: ArrowLeftRight, group: 'workspace' },
-  { path: 'suppliers', label: 'Suppliers', description: 'Supplier profiles, purchases and payments.', icon: Truck, group: 'workspace' },
+  { path: 'suppliers', label: 'Suppliers', description: 'Supplier profiles, purchases and payments.', icon: Truck, group: 'workspace', phase: 7 },
   { path: 'staff', label: 'Staff & access', description: 'Staff accounts, roles and approval PINs.', icon: Users, group: 'workspace' },
-  { path: 'reports', label: 'Reports', description: 'Sales, tax and stock reports with CSV export.', icon: ChartColumn, group: 'workspace', phase: 7 },
+  { path: 'reports', label: 'Reports', description: 'Sales, tax and stock reports with CSV export.', icon: ChartColumn, group: 'workspace' },
   { path: 'settings', label: 'Settings', description: 'Store details, tax and discount rules.', icon: Settings, group: 'setup' },
 ]
 

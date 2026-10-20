@@ -63,7 +63,7 @@ These can't be carried over from the prototype.
 
 Each phase ends in something that can be demoed. The backend and frontend for a module ship together, following the spec's order in §10. The big change from that order is that billing comes early.
 
-> **Renumbered on 20 Oct 2026 (the user's call):** Products was built as **Phase 3**, ahead of Billing, and Billing became **Phase 4**. **Phase 5** covered Transactions and an initial sales summary only; voids and Returns are not yet scheduled. **Phase 6** is the Inventory module: stock levels, adjustments and movement history from row 4. The table below keeps the original plan for reference; §9 logs the order actually built.
+> **Renumbered on 20 Oct 2026 (the user's call):** Products was built as **Phase 3**, ahead of Billing, and Billing became **Phase 4**. **Phase 5** covered Transactions and an initial sales summary only; voids and Returns are not yet scheduled. **Phase 6** is the Inventory module: stock levels, adjustments and movement history from row 4. **Phase 7** is Suppliers and Purchasing (the supplier half of row 6); Staff and Overview/Reports are not yet scheduled. The table below keeps the original plan for reference; §9 logs the order actually built.
 
 | Phase | Scope | Exit criteria |
 |---|---|---|
@@ -112,7 +112,8 @@ Every route is a client route under one SPA. Django serves `index.html` for any 
 | `/admin/returns/new` | `ReturnWizardPage` (`?invoice=` to prefill from a transaction) |
 | `/admin/returns/:returnNo` | `ReturnDetailPage` |
 | `/admin/suppliers` | `SupplierListPage` |
-| `/admin/suppliers/:id` | `SupplierProfilePage` (`?tab=activity|purchases|payments|statement`) |
+| `/admin/suppliers/:id` | `SupplierProfilePage` (sections, not tabs; see the Phase 7 log) · `/new`, `/:id/edit`, `/:id/purchases/new` |
+| `/admin/suppliers/purchases/:purchaseNo` | `PurchaseDetailPage` (receive, edit, cancel) · `/edit` |
 | `/admin/staff` | `StaffListPage`; add and edit are dialogs |
 | `/admin/reports` | `ReportLibraryPage` |
 | `/admin/reports/:reportKey` | `ReportWorkspacePage` (`?from=&to=&…`) |
@@ -450,7 +451,7 @@ Every checklist assumes the cross-cutting checks pass:
 - [x] The summary shows tracked variant, low-stock and out-of-stock counts.
 - [x] The adjustment form has a variant, a type (add, remove or set counted), quantity and reason. A reason is required for remove and set. It previews current → resulting quantity before confirming. (Phase 6 requires a reason for every adjustment, including add.)
 - [x] Negative stock is rejected by the server.
-- [x] Every change appears in movement history with its type, delta, linked reference, actor, time and reason. Sale references link to the transaction; purchases and returns will link once those modules exist.
+- [x] Every change appears in movement history with its type, delta, linked reference, actor, time and reason. Sale references link to the transaction and purchase receipts (`PUR-…`) to the purchase; returns will link once that module exists.
 
 ### Transactions
 - [x] Search by invoice number or customer, and filter by date, method, cashier and status. *Invoice number, date range, cashier and method are built. Customer waits for customer attach at checkout; status has only one value (Completed) until voids exist, so it has no UI filter yet (the API accepts `status`).*
@@ -467,9 +468,9 @@ Every checklist assumes the cross-cutting checks pass:
 - [ ] The original sale isn't changed. The transaction shows a derived "Partially returned" or "Returned" state and a link to the return.
 
 ### Suppliers
-- [ ] The list shows Name, Category, Contact, Recorded balance (labelled as such), Status and Actions.
-- [ ] The profile has tabs for Activity, Purchases, Payments and Statement. The statement shows a running balance with references.
-- [ ] The contact form has no balance field. Balances change only through purchase and payment entries.
+- [x] The list shows Name, Category, Contact, Recorded balance (labelled as such), Status and Actions. *Each row links to the profile, where the actions live.*
+- [x] The profile has tabs for Activity, Purchases, Payments and Statement. The statement shows a running balance with references. *Built as sections on one page (details, figures, purchases, statement) because there's no Tabs component; payments appear in the statement, and there's no separate activity feed.*
+- [x] The contact form has no balance field. Balances change only through purchase and payment entries.
 
 ### Staff and access
 - [ ] The list shows Name, Email, Role, Status and Last activity (only if tracked), with an Active/Inactive filter.
@@ -956,3 +957,62 @@ Scope set by the user: an inventory overview with variant- and product-level qua
 - Reorder levels are edited on the product form; there's no bulk edit.
 - No CSV export of stock or movements.
 - Purchases and returns don't exist yet, so their movement types never appear.
+
+### Phase 7: Suppliers and Purchasing (done, 20 Oct 2026)
+
+Scope set by the user: supplier management, purchase recording, stock receiving through the existing movement service, supplier history with payments recorded (not verified), and inventory integration. Staff, Overview, Reports and accounting are not part of it.
+
+**Reconciliation before the phase (read-only, no database change):** `SH-CT-001-S-BLU` is at 3. Its ledger is opening +3, #66 −1 and #67 −1 (the accidental removals), #68 +1 and #69 −1 (the intended concurrent-add pair), and #70 +2 (the documented reversal). The running balance is consistent at every step, the five browser-check movements net to zero, and no other variant has a non-opening movement. All 68 variants reconcile with their ledgers. The "damaged sample" reason on #66, #67 and #69 was text supplied by the check script; nothing was damaged. #70's reason records the correction.
+
+**Backend (`apps/suppliers`, all admin-only via `IsAdmin`):**
+- **Models:** `Supplier` gains contact name, GSTIN, address, state, notes and `updated_at`. New models:
+  - `Purchase`: `PUR-000001` numbers; status `ordered` ("Awaiting goods"), `received` or `cancelled`; supplier invoice number and date; notes; stored totals; who recorded, received or cancelled it and when; and the idempotency key.
+  - `PurchaseLine`: a snapshot of the product name, SKU, size and colour, plus quantity, unit cost, GST rate and amounts. One line per variant.
+  - `SupplierPayment`.
+  - Constraints: one supplier invoice number per supplier (case-insensitive, ignoring blanks and cancelled purchases), one purchase or payment per idempotency key per user, and payment amounts above zero. Migration `0002_purchases_and_payments` is additive.
+- **Suppliers:** `GET/POST /suppliers/` (search over name, contact, phone, email and exact GSTIN; status and category filters; name or balance ordering; paginated), `GET /suppliers/categories/`, and `GET/PATCH /suppliers/{id}/`. There's no delete: deactivating keeps every purchase and payment, blocks new purchases, and still allows purchases already awaiting goods to be received. Balances are read-only.
+- **Purchases:**
+  - `POST /suppliers/purchases/quote/` prices draft lines.
+  - `GET/POST /suppliers/{id}/purchases/`: the POST needs an `Idempotency-Key` UUID. A replay returns the same purchase; a key reused with a different body gets 409.
+  - `GET/PUT /suppliers/purchases/{number}/`: edits only while awaiting goods.
+  - `POST …/receive/` and `POST …/cancel/` (a reason is needed to cancel).
+  - **Pricing (`services.price_lines`):** tax per line is `round_half_up(quantity × unit cost × rate)`. The rate is the GST slab entered from the invoice; when it's left blank, the product's own rule is applied to the unit cost.
+  - **Validation:** 1 to 100 lines, quantities of 1 to 10,000, a positive cost, a known GST slab, no future dates, and an active supplier and active variants.
+- **Receiving (`services.receive_purchase`):** one transaction that locks the purchase row and writes one `purchase` movement per line through `record_movement()`, in variant order. Each movement references the purchase number and gives the supplier and invoice as its reason. The purchase is then marked received.
+  - Recording a purchase changes no stock.
+  - A second receive gets 409 `already_received` with no stock change, and a cancelled purchase gets 409 `purchase_closed`.
+  - The supplier invoice number is required before receiving.
+  - A failure on any line rolls back every line and the status.
+- **Payments:** `GET/POST /suppliers/{id}/payments/` takes an idempotency key. The method (bank transfer, UPI, cheque or cash) is only a label: nothing is charged, and `gateway_verified` is always false. Payments can't be edited or voided.
+- **Balance and statement:** the balance is received purchases minus recorded payments. Purchases awaiting goods are shown separately and aren't owed. `GET /suppliers/{id}/statement/` lists received purchases and payments by date with a running balance; an advance shows as a negative balance.
+- **Schema:** Product and Supplier statuses now share `ActiveStatusEnum` (it was `ProductStatusEnum`). `PurchaseStatusEnum` and `SupplierPaymentMethodEnum` are named.
+- **Tests (`apps/suppliers/tests.py`, 62):** access for every endpoint and role; supplier CRUD and validation; balances that can't be typed in; deactivation; search, filters, ordering and pagination; totals at 5%, 18% and an explicit 12%, with half-up rounding and the quote matching the record; recording without a stock change; invalid purchases saving nothing; idempotent replay and key reuse; invoice uniqueness; editing; snapshots; receiving once with one movement per line; a second receive refused; rollback when the second line fails; cancelling; ledger reconciliation through the inventory movements API; payments and the statement.
+  - **Concurrency (PostgreSQL only):** four simultaneous receives give one 200 and three 409s, and stock goes up once.
+
+**Frontend (`features/suppliers`):**
+- **`/admin/suppliers`:** search, category, status and sort mirrored in the URL; a table from `lg`, cards below; and the recorded balance labelled, with advances marked.
+- **Forms:** add and edit supplier (react-hook-form + zod, GSTIN uppercased, server errors on fields, no balance field).
+- **Profile:** contact details, four figures (recorded balance, goods received, payments recorded, awaiting goods) with definitions, purchases with a status filter and pagination, and the statement. Deactivate and reactivate need confirmation.
+  - **Record payment dialog:** says it neither sends money nor checks with a bank. One key per opened form, so a retry after a lost response records one payment.
+- **Record and edit purchase:** variant search (reusing `/inventory/variants/?status=active`), lines with quantity, unit cost and GST ("Product rule" or a slab), and totals only from the server's debounced quote. One idempotency key per opened form.
+- **Purchase detail:** the line snapshot and totals. While awaiting goods it shows Receive, Edit and Cancel.
+  - Receive confirms the units and the amount owed. It's disabled until an invoice number is entered, and `already_received` is shown as done, not as an error.
+  - Cancel needs a reason.
+  - Received purchases link to their stock movements.
+  - Receiving invalidates suppliers, inventory, the admin catalogue and the till's catalogue.
+- **Stock ledger:** `PUR-…` references link to the purchase (`referencePath` in `features/inventory/labels.ts`).
+- **Nav:** Suppliers takes the Phase 7 badge. The AdminShell placeholder tests now use Returns.
+- **Tests (`suppliers.test.tsx`, 21):** cashier access; list contents, filters in the URL and request, phone cards and the empty state; form validation, the payload and server errors; profile figures, purchases and statement; a missing supplier; a payment retried with the same key; deactivation; recording with the server's totals, the key and no receive call; server line errors; receiving, an already-received purchase, a missing invoice number, cancelling, the received view, a malformed number; the ledger link; and parsing helpers.
+
+**Browser check (PostgreSQL dev database, 1440, 1120, 820, 390 and 360 wide):** 28 of 28 passed, then 7 of 7 in a read-only re-check after fixes. No console errors.
+- **Passed:** list, profile, supplier form and purchase form at every width without sideways scrolling; an empty form sending nothing; the server quote shown as the total; recording leaving stock unchanged; the receive and payment dialogs' wording (both closed without submitting); cancelling with a reason; the balance unchanged; and cashiers sent to 403 and refused by the API.
+- **Fixed after the first run:** the item search stayed open after Add until its debounce caught up; list contacts wrapped with a dangling separator; and the purchase totals' border didn't span the card.
+- **Dev data:** migration `suppliers.0002` applied. One purchase, `PUR-000001` for Cotton Collective (1 × `SH-CT-001-S-BLU` at ₹1 + 5% GST, invoice `BROWSER-CHECK-1`), was recorded and then cancelled ("Browser check: not a real purchase"). It changed no stock or balance. No payments were recorded and no goods were received in the browser; those are covered by the API and page tests. Stock movements still end at #70.
+
+**Decisions and limits:**
+- **No partial receipts.** Purchase ordering is out of scope (B10), so a purchase records what the supplier billed. If fewer items arrive, edit the quantities before receiving, or cancel and re-record.
+- Receiving doesn't update the product's cost price.
+- No purchase discounts, no CGST/SGST/IGST split, and no freight or other charges.
+- There's no store-wide purchases list; purchases are listed per supplier.
+- There are no returns to suppliers and no debit notes. Payments can't be edited, voided or allocated to particular purchases.
+- This is an operational record, not accounting. Supplier balances aren't reconciled with a bank.

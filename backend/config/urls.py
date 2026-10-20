@@ -13,6 +13,7 @@ api_v1 = [
     path("store/", include("apps.store.urls")),
     path("catalog/", include("apps.catalog.urls")),
     path("inventory/", include("apps.inventory.urls")),
+    path("suppliers/", include("apps.suppliers.urls")),
     path("billing/", include(billing_urlpatterns)),
     path("sales/", include(sales_urlpatterns)),
     path("schema/", SpectacularAPIView.as_view(), name="api-schema"),

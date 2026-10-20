@@ -27,6 +27,18 @@ export const queryKeys = {
     variant: (id: number) => ['inventory', 'variant', id] as const,
     movements: (params: Record<string, string>) => ['inventory', 'movements', params] as const,
   },
+  suppliers: {
+    /** Supplier records, balances, purchases, payments and statements. */
+    all: ['suppliers'] as const,
+    lists: ['suppliers', 'list'] as const,
+    list: (params: Record<string, string>) => ['suppliers', 'list', params] as const,
+    categories: ['suppliers', 'categories'] as const,
+    detail: (id: number) => ['suppliers', 'detail', id] as const,
+    purchases: (id: number, params: Record<string, string>) => ['suppliers', 'purchases', id, params] as const,
+    statement: (id: number) => ['suppliers', 'statement', id] as const,
+    purchase: (number: string) => ['suppliers', 'purchase', number] as const,
+    quote: (lines: unknown) => ['suppliers', 'quote', lines] as const,
+  },
   billing: {
     settings: ['billing', 'settings'] as const,
     categories: ['billing', 'categories'] as const,

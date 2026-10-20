@@ -29,7 +29,7 @@ import {
   writeMovementParams,
   type MovementParams,
 } from '../inventoryParams'
-import { formatDelta, formatWhen, isInvoiceReference, MOVEMENT_LABELS, STOCK_LABELS, variantName } from '../labels'
+import { formatDelta, formatWhen, MOVEMENT_LABELS, referencePath, STOCK_LABELS, variantName } from '../labels'
 
 function TypeBadge({ m }: { m: InventoryMovement }) {
   const type = MOVEMENT_LABELS[m.type]
@@ -44,10 +44,11 @@ function Change({ m }: { m: InventoryMovement }) {
   )
 }
 
-/** Sales link to their saved bill; other references show as text. */
+/** Sales link to their saved bill and purchase receipts to their purchase; other references show as text. */
 function Reference({ m }: { m: InventoryMovement }) {
-  return isInvoiceReference(m.reference) ? (
-    <Link to={`/admin/transactions/${m.reference}`} className="tabular text-ink-2 hover:text-primary hover:underline">
+  const path = referencePath(m.reference)
+  return path ? (
+    <Link to={path} className="tabular text-ink-2 hover:text-primary hover:underline">
       {m.reference}
     </Link>
   ) : (

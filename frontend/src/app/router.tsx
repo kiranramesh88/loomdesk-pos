@@ -10,6 +10,7 @@ import { billingRoutes } from '@/features/billing/routes'
 import { productRoutes } from '@/features/products/routes'
 import { transactionRoutes } from '@/features/transactions/routes'
 import { inventoryRoutes } from '@/features/inventory/routes'
+import { supplierRoutes } from '@/features/suppliers/routes'
 import { ALL_ROLES } from '@/types/domain'
 
 import { HomeRedirect, RequireRole } from './guards'
@@ -37,10 +38,11 @@ const MODULE_ROUTES: Partial<Record<string, RouteObject[]>> = {
   products: productRoutes,
   transactions: transactionRoutes,
   inventory: inventoryRoutes,
+  suppliers: supplierRoutes,
 }
 
 // One route per nav item, so titles, active links and nested paths come from the same config.
-// `<path>/*` keeps deep links such as /admin/suppliers/12 inside their placeholder module.
+// `<path>/*` keeps deep links such as /admin/returns/12 inside their placeholder module.
 const adminRoutes: RouteObject[] = [
   ...ADMIN_NAV.map((item): RouteObject => {
     const handle: AdminRouteHandle = { title: item.label }

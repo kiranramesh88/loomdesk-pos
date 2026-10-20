@@ -146,12 +146,15 @@ SPECTACULAR_SETTINGS = {
     "COMPONENT_SPLIT_REQUEST": True,
     "ENUM_NAME_OVERRIDES": {
         "RoleEnum": "apps.accounts.models.Role",
-        "ProductStatusEnum": "apps.catalog.models.Product.Status",
+        # Products and suppliers share active/inactive.
+        "ActiveStatusEnum": "apps.catalog.models.Product.Status",
         "TaxRuleKindEnum": "apps.catalog.models.TaxRule.Kind",
         "StockMovementTypeEnum": "apps.inventory.models.StockMovement.Type",
         "StockStateEnum": "apps.catalog.serializers.STOCK_STATES",
         "PaymentMethodEnum": "apps.sales.models.Payment.Method",
         "SaleStatusEnum": "apps.sales.models.Sale.Status",
+        "PurchaseStatusEnum": "apps.suppliers.models.Purchase.Status",
+        "SupplierPaymentMethodEnum": "apps.suppliers.models.SupplierPayment.Method",
         "DiscountKindEnum": "apps.sales.serializers.DISCOUNT_KINDS",
     },
 }

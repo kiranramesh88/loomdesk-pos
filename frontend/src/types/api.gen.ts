@@ -445,10 +445,184 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/suppliers/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Suppliers with their recorded balances. Suppliers are deactivated, never deleted. */
+        get: operations["suppliers_list"];
+        put?: never;
+        /** @description Suppliers with their recorded balances. Suppliers are deactivated, never deleted. */
+        post: operations["suppliers_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/suppliers/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["suppliers_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["suppliers_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/suppliers/{id}/payments/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description GET: payments recorded for this supplier. POST: record one. These are staff entries, not verified settlements. */
+        get: operations["suppliers_payments_list"];
+        put?: never;
+        /** @description GET: payments recorded for this supplier. POST: record one. These are staff entries, not verified settlements. */
+        post: operations["suppliers_payments_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/suppliers/{id}/purchases/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description GET: this supplier's purchases, newest first. POST: record a purchase (stock is unchanged until received). */
+        get: operations["suppliers_purchases_list"];
+        put?: never;
+        /** @description Record a purchase. 201 when written; 200 when the same Idempotency-Key was already used for it. */
+        post: operations["suppliers_purchases_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/suppliers/{id}/statement/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["suppliers_statement_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/suppliers/categories/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["suppliers_categories_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/suppliers/purchases/{number}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["suppliers_purchases_retrieve"];
+        put: operations["suppliers_purchases_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/suppliers/purchases/{number}/cancel/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["suppliers_purchases_cancel_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/suppliers/purchases/{number}/receive/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Receive the goods: every line is added to stock once, as purchase movements referencing this purchase. */
+        post: operations["suppliers_purchases_receive_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/suppliers/purchases/quote/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Price purchase lines without saving, so the form shows the server's own totals. */
+        post: operations["suppliers_purchases_quote_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * @description * `active` - Active
+         *     * `inactive` - Inactive
+         * @enum {string}
+         */
+        ActiveStatusEnum: "active" | "inactive";
         Approver: {
             readonly id: number;
             readonly full_name: string;
@@ -472,6 +646,9 @@ export interface components {
             store_code: string;
             prices_include_tax: boolean;
             cashier_discount_limit_pct: number;
+        };
+        CancelPurchaseRequest: {
+            reason: string;
         };
         CashierSummary: {
             sale_count: number;
@@ -643,6 +820,21 @@ export interface components {
             previous?: string | null;
             results: components["schemas"]["ProductList"][];
         };
+        PaginatedPurchaseListItemList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["PurchaseListItem"][];
+        };
         PaginatedSaleListItemList: {
             /** @example 123 */
             count: number;
@@ -673,6 +865,36 @@ export interface components {
             previous?: string | null;
             results: components["schemas"]["SellableProduct"][];
         };
+        PaginatedSupplierListList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["SupplierList"][];
+        };
+        PaginatedSupplierPaymentList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["SupplierPayment"][];
+        };
         /**
          * @description Create or update a product and its variants in one atomic request.
          *
@@ -688,8 +910,21 @@ export interface components {
             cost_price_paise?: number | null;
             hsn_code?: string;
             tax_rule?: number | null;
-            status?: components["schemas"]["ProductStatusEnum"];
+            status?: components["schemas"]["ActiveStatusEnum"];
             variants?: components["schemas"]["VariantWriteRequest"][];
+        };
+        /** @description Contact and business details only. Balances change through purchases and payments, never here. */
+        PatchedSupplierWriteRequest: {
+            name?: string;
+            category?: string;
+            contact_name?: string;
+            phone?: string;
+            email?: string;
+            gstin?: string;
+            address?: string;
+            state?: string;
+            notes?: string;
+            status?: components["schemas"]["ActiveStatusEnum"];
         };
         Payment: {
             readonly method: components["schemas"]["PaymentMethodEnum"];
@@ -718,6 +953,15 @@ export interface components {
             can_approve_discounts: boolean;
             can_view_costs: boolean;
         };
+        PricedLine: {
+            variant: number;
+            quantity: number;
+            unit_cost_paise: number;
+            tax_rate_bp: number;
+            subtotal_paise: number;
+            tax_paise: number;
+            total_paise: number;
+        };
         ProductDetail: {
             readonly id: number;
             readonly name: string;
@@ -731,7 +975,7 @@ export interface components {
             readonly tax_rule: components["schemas"]["TaxRule"];
             readonly effective_tax_rule: components["schemas"]["TaxRule"];
             readonly image_url: string | null;
-            readonly status: components["schemas"]["ProductStatusEnum"];
+            readonly status: components["schemas"]["ActiveStatusEnum"];
             readonly variants: components["schemas"]["Variant"][];
             readonly recent_movements: components["schemas"]["StockMovement"][];
             /** Format: date-time */
@@ -753,19 +997,13 @@ export interface components {
             readonly base_price_paise: number;
             readonly min_price_paise: number;
             readonly max_price_paise: number;
-            readonly status: components["schemas"]["ProductStatusEnum"];
+            readonly status: components["schemas"]["ActiveStatusEnum"];
             readonly variant_count: number;
             readonly total_on_hand: number;
             readonly stock_state: components["schemas"]["StockStateEnum"];
             /** Format: date-time */
             readonly updated_at: string;
         };
-        /**
-         * @description * `active` - Active
-         *     * `inactive` - Inactive
-         * @enum {string}
-         */
-        ProductStatusEnum: "active" | "inactive";
         /**
          * @description Create or update a product and its variants in one atomic request.
          *
@@ -781,8 +1019,107 @@ export interface components {
             cost_price_paise?: number | null;
             hsn_code?: string;
             tax_rule?: number | null;
-            status?: components["schemas"]["ProductStatusEnum"];
+            status?: components["schemas"]["ActiveStatusEnum"];
             variants?: components["schemas"]["VariantWriteRequest"][];
+        };
+        Purchase: {
+            readonly id: number;
+            readonly number: string;
+            readonly supplier: number;
+            readonly supplier_name: string;
+            readonly supplier_status: string;
+            readonly status: components["schemas"]["PurchaseStatusEnum"];
+            readonly supplier_invoice_no: string;
+            /** Format: date */
+            readonly purchase_date: string;
+            readonly notes: string;
+            readonly subtotal_paise: number;
+            readonly tax_paise: number;
+            readonly total_paise: number;
+            readonly lines: components["schemas"]["PurchaseLine"][];
+            /** Format: date-time */
+            readonly created_at: string;
+            readonly created_by_name: string | null;
+            /** Format: date-time */
+            readonly received_at: string | null;
+            readonly received_by_name: string | null;
+            /** Format: date-time */
+            readonly cancelled_at: string | null;
+            readonly cancelled_by_name: string | null;
+            readonly cancel_reason: string;
+        };
+        PurchaseLine: {
+            readonly id: number;
+            readonly variant: number;
+            readonly product_id: number;
+            readonly product_name: string;
+            readonly variant_sku: string;
+            readonly size: string;
+            readonly colour: string;
+            readonly quantity: number;
+            readonly unit_cost_paise: number;
+            readonly tax_rate_bp: number;
+            readonly subtotal_paise: number;
+            readonly tax_paise: number;
+            readonly total_paise: number;
+        };
+        PurchaseLineInputRequest: {
+            variant: number;
+            quantity: number;
+            /** @description Cost per unit before GST. */
+            unit_cost_paise: number;
+            /**
+             * @description GST on the supplier's invoice. Leave out to use the product's GST rule at this unit cost.
+             *
+             *     * `0` - 0
+             *     * `500` - 500
+             *     * `1200` - 1200
+             *     * `1800` - 1800
+             *     * `2800` - 2800
+             *     * `4000` - 4000
+             */
+            tax_rate_bp?: (components["schemas"]["TaxRateBpEnum"] | components["schemas"]["NullEnum"]) | null;
+        };
+        PurchaseLinesRequest: {
+            lines: components["schemas"]["PurchaseLineInputRequest"][];
+        };
+        PurchaseListItem: {
+            readonly id: number;
+            readonly number: string;
+            readonly supplier: number;
+            readonly supplier_name: string;
+            readonly status: components["schemas"]["PurchaseStatusEnum"];
+            readonly supplier_invoice_no: string;
+            /** Format: date */
+            readonly purchase_date: string;
+            /** @description Units on the purchase. */
+            readonly item_count: number;
+            readonly total_paise: number;
+            /** Format: date-time */
+            readonly received_at: string | null;
+        };
+        PurchaseQuote: {
+            lines: components["schemas"]["PricedLine"][];
+            subtotal_paise: number;
+            tax_paise: number;
+            total_paise: number;
+        };
+        /**
+         * @description * `ordered` - Awaiting goods
+         *     * `received` - Received
+         *     * `cancelled` - Cancelled
+         * @enum {string}
+         */
+        PurchaseStatusEnum: "ordered" | "received" | "cancelled";
+        PurchaseWriteRequest: {
+            lines: components["schemas"]["PurchaseLineInputRequest"][];
+            supplier_invoice_no?: string;
+            /**
+             * Format: date
+             * @description The supplier invoice date.
+             */
+            purchase_date: string;
+            notes?: string;
         };
         Quote: {
             lines: components["schemas"]["QuoteLine"][];
@@ -924,6 +1261,25 @@ export interface components {
         Session: {
             user: components["schemas"]["Me"] | null;
         };
+        StatementEntry: {
+            /** Format: date */
+            date: string;
+            kind: components["schemas"]["StatementEntryKindEnum"];
+            reference: string;
+            detail: string;
+            /** @description Owed for goods received. */
+            debit_paise: number;
+            /** @description Paid, as recorded by staff. */
+            credit_paise: number;
+            /** @description Running recorded balance after this entry. */
+            balance_paise: number;
+        };
+        /**
+         * @description * `purchase` - Purchase received
+         *     * `payment` - Payment recorded
+         * @enum {string}
+         */
+        StatementEntryKindEnum: "purchase" | "payment";
         /**
          * @description * `add` - Add stock
          *     * `remove` - Remove stock
@@ -982,6 +1338,99 @@ export interface components {
             readonly code: string;
             readonly state: string;
         };
+        SupplierDetail: {
+            readonly id: number;
+            readonly name: string;
+            readonly category: string;
+            readonly contact_name: string;
+            readonly phone: string;
+            /** Format: email */
+            readonly email: string;
+            readonly gstin: string;
+            readonly address: string;
+            readonly state: string;
+            readonly notes: string;
+            readonly status: components["schemas"]["ActiveStatusEnum"];
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+            /** @description Received purchases, GST included. */
+            readonly received_paise: number;
+            /** @description Purchases recorded but not yet received. */
+            readonly awaiting_paise: number;
+            /** @description Payments recorded by staff. */
+            readonly paid_paise: number;
+            /** @description Recorded balance: received purchases minus recorded payments. Negative is an advance. */
+            readonly balance_paise: number;
+        };
+        SupplierList: {
+            readonly id: number;
+            readonly name: string;
+            readonly category: string;
+            readonly contact_name: string;
+            readonly phone: string;
+            /** Format: email */
+            readonly email: string;
+            readonly status: components["schemas"]["ActiveStatusEnum"];
+            /** @description Received purchases, GST included. */
+            readonly received_paise: number;
+            /** @description Payments recorded by staff. */
+            readonly paid_paise: number;
+            /** @description Recorded balance: received purchases minus recorded payments. Negative is an advance. */
+            readonly balance_paise: number;
+        };
+        SupplierPayment: {
+            readonly id: number;
+            /** Format: date */
+            readonly paid_on: string;
+            readonly amount_paise: number;
+            readonly method: components["schemas"]["SupplierPaymentMethodEnum"];
+            readonly reference: string;
+            readonly notes: string;
+            readonly recorded_by_name: string;
+            /** Format: date-time */
+            readonly created_at: string;
+            /**
+             * @description Always false: entered by staff.
+             * @default false
+             */
+            readonly gateway_verified: boolean;
+        };
+        /**
+         * @description * `bank_transfer` - Bank transfer
+         *     * `upi` - UPI
+         *     * `cheque` - Cheque
+         *     * `cash` - Cash
+         * @enum {string}
+         */
+        SupplierPaymentMethodEnum: "bank_transfer" | "upi" | "cheque" | "cash";
+        SupplierPaymentWriteRequest: {
+            /** Format: date */
+            paid_on: string;
+            /** Format: int64 */
+            amount_paise: number;
+            method: components["schemas"]["SupplierPaymentMethodEnum"];
+            reference?: string;
+            notes?: string;
+        };
+        SupplierStatement: {
+            entries: components["schemas"]["StatementEntry"][];
+            balance_paise: number;
+        };
+        /** @description Contact and business details only. Balances change through purchases and payments, never here. */
+        SupplierWriteRequest: {
+            name: string;
+            category: string;
+            contact_name?: string;
+            phone?: string;
+            email?: string;
+            gstin?: string;
+            address?: string;
+            state?: string;
+            notes?: string;
+            status?: components["schemas"]["ActiveStatusEnum"];
+        };
         TaxBreakdown: {
             rate_bp: number;
             taxable_paise: number;
@@ -989,6 +1438,16 @@ export interface components {
             cgst_paise: number;
             sgst_paise: number;
         };
+        /**
+         * @description * `0` - 0
+         *     * `500` - 500
+         *     * `1200` - 1200
+         *     * `1800` - 1800
+         *     * `2800` - 2800
+         *     * `4000` - 4000
+         * @enum {integer}
+         */
+        TaxRateBpEnum: 0 | 500 | 1200 | 1800 | 2800 | 4000;
         TaxRule: {
             readonly id: number;
             readonly name: string;
@@ -1778,6 +2237,415 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Store"];
+                };
+            };
+        };
+    };
+    suppliers_list: {
+        parameters: {
+            query?: {
+                category?: string;
+                /**
+                 * @description Ordering
+                 *
+                 *     * `name` - Name
+                 *     * `-name` - Name (descending)
+                 *     * `balance` - Balance
+                 *     * `-balance` - Balance (descending)
+                 */
+                ordering?: ("-balance" | "-name" | "balance" | "name")[];
+                /** @description A page number within the paginated result set. */
+                page?: number;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description Name, contact, phone, email or GSTIN */
+                q?: string;
+                /**
+                 * @description * `active` - Active
+                 *     * `inactive` - Inactive
+                 */
+                status?: "active" | "inactive";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedSupplierListList"];
+                };
+            };
+        };
+    };
+    suppliers_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupplierWriteRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["SupplierWriteRequest"];
+                "multipart/form-data": components["schemas"]["SupplierWriteRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierDetail"];
+                };
+            };
+        };
+    };
+    suppliers_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierDetail"];
+                };
+            };
+        };
+    };
+    suppliers_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedSupplierWriteRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedSupplierWriteRequest"];
+                "multipart/form-data": components["schemas"]["PatchedSupplierWriteRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierDetail"];
+                };
+            };
+        };
+    };
+    suppliers_payments_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedSupplierPaymentList"];
+                };
+            };
+        };
+    };
+    suppliers_payments_create: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description UUID made when the form opens. Retrying with the same key returns the first record instead of adding another. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupplierPaymentWriteRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["SupplierPaymentWriteRequest"];
+                "multipart/form-data": components["schemas"]["SupplierPaymentWriteRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierPayment"];
+                };
+            };
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierPayment"];
+                };
+            };
+        };
+    };
+    suppliers_purchases_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /**
+                 * @description * `ordered` - Awaiting goods
+                 *     * `received` - Received
+                 *     * `cancelled` - Cancelled
+                 */
+                status?: "cancelled" | "ordered" | "received";
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedPurchaseListItemList"];
+                };
+            };
+        };
+    };
+    suppliers_purchases_create: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description UUID made when the form opens. Retrying with the same key returns the first record instead of adding another. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PurchaseWriteRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PurchaseWriteRequest"];
+                "multipart/form-data": components["schemas"]["PurchaseWriteRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Purchase"];
+                };
+            };
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Purchase"];
+                };
+            };
+        };
+    };
+    suppliers_statement_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierStatement"];
+                };
+            };
+        };
+    };
+    suppliers_categories_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
+                };
+            };
+        };
+    };
+    suppliers_purchases_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                number: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Purchase"];
+                };
+            };
+        };
+    };
+    suppliers_purchases_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                number: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PurchaseWriteRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PurchaseWriteRequest"];
+                "multipart/form-data": components["schemas"]["PurchaseWriteRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Purchase"];
+                };
+            };
+        };
+    };
+    suppliers_purchases_cancel_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                number: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CancelPurchaseRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CancelPurchaseRequest"];
+                "multipart/form-data": components["schemas"]["CancelPurchaseRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Purchase"];
+                };
+            };
+        };
+    };
+    suppliers_purchases_receive_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                number: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Purchase"];
+                };
+            };
+        };
+    };
+    suppliers_purchases_quote_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PurchaseLinesRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PurchaseLinesRequest"];
+                "multipart/form-data": components["schemas"]["PurchaseLinesRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PurchaseQuote"];
                 };
             };
         };
