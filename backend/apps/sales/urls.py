@@ -5,8 +5,10 @@ from .views import (
     BillingCategoryListView,
     BillingSettingsView,
     QuoteView,
-    SaleCreateView,
+    SaleCashierListView,
     SaleDetailView,
+    SaleListCreateView,
+    SalesSummaryView,
     SellableProductListView,
 )
 
@@ -18,7 +20,9 @@ billing_urlpatterns = [
 ]
 
 sales_urlpatterns = [
-    path("", SaleCreateView.as_view(), name="sale-create"),
+    path("", SaleListCreateView.as_view(), name="sale-list"),
     path("quote/", QuoteView.as_view(), name="sale-quote"),
+    path("summary/", SalesSummaryView.as_view(), name="sale-summary"),
+    path("cashiers/", SaleCashierListView.as_view(), name="sale-cashiers"),
     path("<str:invoice_no>/", SaleDetailView.as_view(), name="sale-detail"),
 ]

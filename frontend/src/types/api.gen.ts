@@ -256,7 +256,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * @description GET: sales history, newest first. POST: complete a sale.
+         *
+         *     The list is scoped like receipts: cashiers get their own sales, Senior cashiers and Admins get all.
+         */
+        get: operations["sales_list"];
         put?: never;
         /** @description Complete a sale. 201 when written; 200 when the same Idempotency-Key was already used for this bill. */
         post: operations["sales_create"];
@@ -283,6 +288,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/cashiers/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Staff who have recorded at least one sale, including deactivated accounts, for the cashier filter. */
+        get: operations["sales_cashiers_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/quote/": {
         parameters: {
             query?: never;
@@ -294,6 +316,29 @@ export interface paths {
         put?: never;
         /** @description Price a bill without saving anything. The bill panel shows these figures, never its own. */
         post: operations["sales_quote_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/summary/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Admin summary of completed sales matching the same filters as the list.
+         *
+         *     Totals are the saved bill totals (after discounts, GST included). UPI and card amounts are what the
+         *     cashier recorded; none is gateway-verified, so this is not a settlement figure. Returns are not
+         *     deducted yet because the returns module does not exist.
+         */
+        get: operations["sales_summary_retrieve"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -345,6 +390,12 @@ export interface components {
             prices_include_tax: boolean;
             cashier_discount_limit_pct: number;
         };
+        CashierSummary: {
+            sale_count: number;
+            total_paise: number;
+            cashier: number;
+            cashier_name: string;
+        };
         Category: {
             readonly id: number;
             readonly name: string;
@@ -362,6 +413,12 @@ export interface components {
             expected_total_paise: number;
             approver_id?: number | null;
             approval_pin?: string;
+        };
+        DaySummary: {
+            sale_count: number;
+            total_paise: number;
+            /** Format: date */
+            date: string;
         };
         /** @description `amount` is paise; `percent` is basis points (1000 = 10%). */
         DiscountInputRequest: {
@@ -391,6 +448,11 @@ export interface components {
             readonly role: components["schemas"]["RoleEnum"];
             readonly permissions: components["schemas"]["Permissions"];
         };
+        MethodSummary: {
+            sale_count: number;
+            total_paise: number;
+            method: components["schemas"]["PaymentMethodEnum"];
+        };
         PaginatedProductListList: {
             /** @example 123 */
             count: number;
@@ -405,6 +467,21 @@ export interface components {
              */
             previous?: string | null;
             results: components["schemas"]["ProductList"][];
+        };
+        PaginatedSaleListItemList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["SaleListItem"][];
         };
         PaginatedSellableProductList: {
             /** @example 123 */
@@ -588,6 +665,16 @@ export interface components {
             readonly tax_breakdown: components["schemas"]["TaxBreakdown"][];
             readonly payment: components["schemas"]["Payment"];
         };
+        SaleCashier: {
+            readonly id: number;
+            readonly full_name: string;
+            readonly role: components["schemas"]["RoleEnum"];
+            /**
+             * Active
+             * @description Designates whether this user should be treated as active. Unselect this instead of deleting accounts.
+             */
+            readonly is_active: boolean;
+        };
         SaleLine: {
             readonly id: number;
             readonly variant: number;
@@ -606,11 +693,36 @@ export interface components {
             readonly tax_paise: number;
             readonly total_paise: number;
         };
+        SaleListItem: {
+            readonly invoice_no: string;
+            readonly status: components["schemas"]["SaleStatusEnum"];
+            /** Format: date-time */
+            readonly created_at: string;
+            readonly cashier: number;
+            readonly cashier_name: string;
+            /** @description Units sold on the bill (sum of line quantities). */
+            readonly item_count: number;
+            readonly discount_paise: number;
+            readonly total_paise: number;
+            readonly payment_method: components["schemas"]["PaymentMethodEnum"];
+            readonly gateway_verified: boolean;
+        };
         /**
          * @description * `completed` - Completed
          * @enum {string}
          */
         SaleStatusEnum: "completed";
+        /** @description Completed sales matching the filters, summed from their saved totals (GST included, after discounts). */
+        SalesSummary: {
+            sale_count: number;
+            total_paise: number;
+            subtotal_paise: number;
+            discount_paise: number;
+            tax_paise: number;
+            by_method: components["schemas"]["MethodSummary"][];
+            by_day: components["schemas"]["DaySummary"][];
+            by_cashier: components["schemas"]["CashierSummary"][];
+        };
         SellableProduct: {
             readonly id: number;
             readonly name: string;
@@ -1132,6 +1244,45 @@ export interface operations {
             };
         };
     };
+    sales_list: {
+        parameters: {
+            query?: {
+                cashier?: number;
+                /** @description On or after (store time) */
+                date_from?: string;
+                /** @description On or before (store time) */
+                date_to?: string;
+                /**
+                 * @description * `cash` - Cash
+                 *     * `upi` - UPI
+                 *     * `card` - Card
+                 */
+                method?: "card" | "cash" | "upi";
+                /** @description A page number within the paginated result set. */
+                page?: number;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description Invoice number (or part of it) */
+                q?: string;
+                /** @description * `completed` - Completed */
+                status?: "completed";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedSaleListItemList"];
+                };
+            };
+        };
+    };
     sales_create: {
         parameters: {
             query?: never;
@@ -1189,6 +1340,25 @@ export interface operations {
             };
         };
     };
+    sales_cashiers_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaleCashier"][];
+                };
+            };
+        };
+    };
     sales_quote_create: {
         parameters: {
             query?: never;
@@ -1210,6 +1380,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Quote"];
+                };
+            };
+        };
+    };
+    sales_summary_retrieve: {
+        parameters: {
+            query?: {
+                cashier?: number;
+                /** @description On or after (store time) */
+                date_from?: string;
+                /** @description On or before (store time) */
+                date_to?: string;
+                method?: "card" | "cash" | "upi";
+                /** @description Invoice number (or part of it) */
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SalesSummary"];
                 };
             };
         };

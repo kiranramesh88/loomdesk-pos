@@ -37,6 +37,8 @@ class Sale(models.Model):
     discount_approved_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+"
     )
+    # The approver's name as printed, so renaming the account later doesn't rewrite old receipts.
+    discount_approved_by_name = models.CharField(max_length=120, blank=True)
 
     # Store details as printed on this receipt.
     store_name = models.CharField(max_length=120)

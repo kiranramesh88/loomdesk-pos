@@ -206,6 +206,7 @@ def _write_sale(user: User, data: dict, key, fingerprint: str) -> Sale:
         tax_paise=bill.tax_paise,
         total_paise=bill.total_paise,
         discount_approved_by=approver,
+        discount_approved_by_name=approver.full_name if approver else "",
         store_name=store.name,
         store_code=store.code,
         store_address=store.address,

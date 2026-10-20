@@ -19,7 +19,7 @@ export function AdminSidebar({ me }: { me: Me }) {
   const rail = useMediaQuery(MEDIA.rail)
 
   return (
-    <div className="sticky top-0 hidden h-dvh w-[70px] shrink-0 flex-col overflow-y-auto bg-navy px-2 pt-5 pb-3.5 sm:flex md:w-[215px] md:px-3.5 md:pt-6 lg:w-[238px]">
+    <div className="sticky top-0 hidden h-dvh print:hidden w-[70px] shrink-0 flex-col overflow-y-auto bg-navy px-2 pt-5 pb-3.5 sm:flex md:w-[215px] md:px-3.5 md:pt-6 lg:w-[238px]">
       <div className={cx('pb-6', rail ? 'flex justify-center' : 'px-3')}>{rail ? <BrandMark /> : <Brand tone="dark" />}</div>
 
       <div className={cx('mb-6', !rail && 'mx-1.5')}>

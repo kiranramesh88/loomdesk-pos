@@ -192,9 +192,7 @@ class SaleSerializer(serializers.ModelSerializer):
     payment = PaymentSerializer(read_only=True)
     tax_breakdown = serializers.SerializerMethodField()
     store = serializers.SerializerMethodField()
-    discount_approved_by_name = serializers.CharField(
-        source="discount_approved_by.full_name", read_only=True, allow_null=True, default=None
-    )
+    discount_approved_by_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Sale
@@ -204,6 +202,10 @@ class SaleSerializer(serializers.ModelSerializer):
             "tax_breakdown", "payment",
         ]
         read_only_fields = fields
+
+    @extend_schema_field({"type": "string", "nullable": True})
+    def get_discount_approved_by_name(self, sale: Sale) -> str | None:
+        return sale.discount_approved_by_name or None
 
     @extend_schema_field(TaxBreakdownSerializer(many=True))
     def get_tax_breakdown(self, sale: Sale) -> list[dict]:
@@ -224,3 +226,58 @@ class SaleSerializer(serializers.ModelSerializer):
             "state": sale.store_state,
             "gstin": sale.store_gstin,
         }
+
+
+# --- Sales history (Phase 5). Every figure is the saved snapshot, never today's catalogue or tax rules. ---
+
+
+class SaleListItemSerializer(serializers.ModelSerializer):
+    item_count = serializers.IntegerField(read_only=True, help_text="Units sold on the bill (sum of line quantities).")
+    payment_method = serializers.ChoiceField(source="payment.method", choices=Payment.Method.choices, read_only=True)
+    gateway_verified = serializers.BooleanField(source="payment.gateway_verified", read_only=True)
+
+    class Meta:
+        model = Sale
+        fields = [
+            "invoice_no", "status", "created_at", "cashier", "cashier_name", "item_count", "discount_paise",
+            "total_paise", "payment_method", "gateway_verified",
+        ]
+        read_only_fields = fields
+
+
+class SaleCashierSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ["id", "full_name", "role", "is_active"]
+        read_only_fields = fields
+
+
+class SummaryGroupSerializer(serializers.Serializer):
+    sale_count = serializers.IntegerField()
+    total_paise = serializers.IntegerField()
+
+
+class MethodSummarySerializer(SummaryGroupSerializer):
+    method = serializers.ChoiceField(choices=Payment.Method.choices)
+
+
+class DaySummarySerializer(SummaryGroupSerializer):
+    date = serializers.DateField()
+
+
+class CashierSummarySerializer(SummaryGroupSerializer):
+    cashier = serializers.IntegerField()
+    cashier_name = serializers.CharField()
+
+
+class SalesSummarySerializer(serializers.Serializer):
+    """Completed sales matching the filters, summed from their saved totals (GST included, after discounts)."""
+
+    sale_count = serializers.IntegerField()
+    total_paise = serializers.IntegerField()
+    subtotal_paise = serializers.IntegerField()
+    discount_paise = serializers.IntegerField()
+    tax_paise = serializers.IntegerField()
+    by_method = MethodSummarySerializer(many=True)
+    by_day = DaySummarySerializer(many=True)
+    by_cashier = CashierSummarySerializer(many=True)

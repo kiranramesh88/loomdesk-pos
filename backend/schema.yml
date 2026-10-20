@@ -436,6 +436,76 @@ paths:
                   $ref: '#/components/schemas/TaxRule'
           description: ''
   /api/v1/sales/:
+    get:
+      operationId: sales_list
+      description: |-
+        GET: sales history, newest first. POST: complete a sale.
+
+        The list is scoped like receipts: cashiers get their own sales, Senior cashiers and Admins get all.
+      parameters:
+      - in: query
+        name: cashier
+        schema:
+          type: number
+      - in: query
+        name: date_from
+        schema:
+          type: string
+          format: date
+        description: On or after (store time)
+      - in: query
+        name: date_to
+        schema:
+          type: string
+          format: date
+        description: On or before (store time)
+      - in: query
+        name: method
+        schema:
+          type: string
+          enum:
+          - card
+          - cash
+          - upi
+        description: |-
+          * `cash` - Cash
+          * `upi` - UPI
+          * `card` - Card
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: q
+        schema:
+          type: string
+        description: Invoice number (or part of it)
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - completed
+        description: '* `completed` - Completed'
+      tags:
+      - sales
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedSaleListItemList'
+          description: ''
     post:
       operationId: sales_create
       description: Complete a sale. 201 when written; 200 when the same Idempotency-Key
@@ -499,6 +569,24 @@ paths:
               schema:
                 $ref: '#/components/schemas/Sale'
           description: ''
+  /api/v1/sales/cashiers/:
+    get:
+      operationId: sales_cashiers_list
+      description: Staff who have recorded at least one sale, including deactivated
+        accounts, for the cashier filter.
+      tags:
+      - sales
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SaleCashier'
+          description: ''
   /api/v1/sales/quote/:
     post:
       operationId: sales_quote_create
@@ -526,6 +614,56 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Quote'
+          description: ''
+  /api/v1/sales/summary/:
+    get:
+      operationId: sales_summary_retrieve
+      description: |-
+        Admin summary of completed sales matching the same filters as the list.
+
+        Totals are the saved bill totals (after discounts, GST included). UPI and card amounts are what the
+        cashier recorded; none is gateway-verified, so this is not a settlement figure. Returns are not
+        deducted yet because the returns module does not exist.
+      parameters:
+      - in: query
+        name: cashier
+        schema:
+          type: integer
+      - in: query
+        name: date_from
+        schema:
+          type: string
+          format: date
+        description: On or after (store time)
+      - in: query
+        name: date_to
+        schema:
+          type: string
+          format: date
+        description: On or before (store time)
+      - in: query
+        name: method
+        schema:
+          type: string
+          enum:
+          - card
+          - cash
+          - upi
+      - in: query
+        name: q
+        schema:
+          type: string
+        description: Invoice number (or part of it)
+      tags:
+      - sales
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SalesSummary'
           description: ''
   /api/v1/store/:
     get:
@@ -618,6 +756,22 @@ components:
       - prices_include_tax
       - store_code
       - store_name
+    CashierSummary:
+      type: object
+      properties:
+        sale_count:
+          type: integer
+        total_paise:
+          type: integer
+        cashier:
+          type: integer
+        cashier_name:
+          type: string
+      required:
+      - cashier
+      - cashier_name
+      - sale_count
+      - total_paise
     Category:
       type: object
       properties:
@@ -681,6 +835,20 @@ components:
       - expected_total_paise
       - lines
       - payment
+    DaySummary:
+      type: object
+      properties:
+        sale_count:
+          type: integer
+        total_paise:
+          type: integer
+        date:
+          type: string
+          format: date
+      required:
+      - date
+      - sale_count
+      - total_paise
     DiscountInputRequest:
       type: object
       description: '`amount` is paise; `percent` is basis points (1000 = 10%).'
@@ -747,6 +915,19 @@ components:
       - initials
       - permissions
       - role
+    MethodSummary:
+      type: object
+      properties:
+        sale_count:
+          type: integer
+        total_paise:
+          type: integer
+        method:
+          $ref: '#/components/schemas/PaymentMethodEnum'
+      required:
+      - method
+      - sale_count
+      - total_paise
     PaginatedProductListList:
       type: object
       required:
@@ -770,6 +951,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ProductList'
+    PaginatedSaleListItemList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/SaleListItem'
     PaginatedSellableProductList:
       type: object
       required:
@@ -1258,8 +1462,8 @@ components:
           readOnly: true
         discount_approved_by_name:
           type: string
-          readOnly: true
           nullable: true
+          readOnly: true
         lines:
           type: array
           items:
@@ -1290,6 +1494,30 @@ components:
       - tax_paise
       - taxable_paise
       - total_paise
+    SaleCashier:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        full_name:
+          type: string
+          readOnly: true
+        role:
+          allOf:
+          - $ref: '#/components/schemas/RoleEnum'
+          readOnly: true
+        is_active:
+          type: boolean
+          readOnly: true
+          title: Active
+          description: Designates whether this user should be treated as active. Unselect
+            this instead of deleting accounts.
+      required:
+      - full_name
+      - id
+      - is_active
+      - role
     SaleLine:
       type: object
       properties:
@@ -1358,11 +1586,95 @@ components:
       - unit_price_paise
       - variant
       - variant_sku
+    SaleListItem:
+      type: object
+      properties:
+        invoice_no:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/SaleStatusEnum'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        cashier:
+          type: integer
+          readOnly: true
+        cashier_name:
+          type: string
+          readOnly: true
+        item_count:
+          type: integer
+          readOnly: true
+          description: Units sold on the bill (sum of line quantities).
+        discount_paise:
+          type: integer
+          readOnly: true
+        total_paise:
+          type: integer
+          readOnly: true
+        payment_method:
+          allOf:
+          - $ref: '#/components/schemas/PaymentMethodEnum'
+          readOnly: true
+        gateway_verified:
+          type: boolean
+          readOnly: true
+      required:
+      - cashier
+      - cashier_name
+      - created_at
+      - discount_paise
+      - gateway_verified
+      - invoice_no
+      - item_count
+      - payment_method
+      - status
+      - total_paise
     SaleStatusEnum:
       enum:
       - completed
       type: string
       description: '* `completed` - Completed'
+    SalesSummary:
+      type: object
+      description: Completed sales matching the filters, summed from their saved totals
+        (GST included, after discounts).
+      properties:
+        sale_count:
+          type: integer
+        total_paise:
+          type: integer
+        subtotal_paise:
+          type: integer
+        discount_paise:
+          type: integer
+        tax_paise:
+          type: integer
+        by_method:
+          type: array
+          items:
+            $ref: '#/components/schemas/MethodSummary'
+        by_day:
+          type: array
+          items:
+            $ref: '#/components/schemas/DaySummary'
+        by_cashier:
+          type: array
+          items:
+            $ref: '#/components/schemas/CashierSummary'
+      required:
+      - by_cashier
+      - by_day
+      - by_method
+      - discount_paise
+      - sale_count
+      - subtotal_paise
+      - tax_paise
+      - total_paise
     SellableProduct:
       type: object
       properties:

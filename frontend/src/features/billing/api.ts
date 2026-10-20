@@ -114,10 +114,11 @@ export function useCheckout() {
       apiFetch<Sale>('/sales/', { method: 'POST', body, headers: { 'Idempotency-Key': idempotencyKey } }),
     onSuccess: (sale) => {
       client.setQueryData(queryKeys.sales.detail(sale.invoice_no), sale)
-      // A sale changes stock in the till's catalogue and the admin catalogue. Transactions,
-      // inventory and reports join this list when those modules exist.
+      // A sale changes stock in the till's catalogue and the admin catalogue, and adds to the
+      // sales history. Inventory and reports join this list when those modules exist.
       void client.invalidateQueries({ queryKey: queryKeys.billing.products })
       void client.invalidateQueries({ queryKey: queryKeys.products.all })
+      void client.invalidateQueries({ queryKey: queryKeys.sales.history })
     },
     onError: (error) => {
       // Prices, stock or availability moved since the quote: re-price the bill and refresh stock.

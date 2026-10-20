@@ -17,7 +17,7 @@ export function AdminTopbar({ me, title }: { me: Me; title: string }) {
   const store = useStore()
 
   return (
-    <header className="sticky top-0 z-30 flex h-[62px] shrink-0 items-center gap-2.5 border-b border-line bg-surface/95 px-3 backdrop-blur-md sm:h-[68px] sm:gap-3.5 sm:px-[15px] md:h-[76px] md:px-[22px] lg:gap-[18px] lg:px-[29px]">
+    <header className="sticky top-0 z-30 flex print:hidden h-[62px] shrink-0 items-center gap-2.5 border-b border-line bg-surface/95 px-3 backdrop-blur-md sm:h-[68px] sm:gap-3.5 sm:px-[15px] md:h-[76px] md:px-[22px] lg:gap-[18px] lg:px-[29px]">
       <AdminNavDrawer />
 
       <div className="min-w-0 flex-1">

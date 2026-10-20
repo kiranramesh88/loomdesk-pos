@@ -63,7 +63,7 @@ These can't be carried over from the prototype.
 
 Each phase ends in something that can be demoed. The backend and frontend for a module ship together, following the spec's order in §10. The big change from that order is that billing comes early.
 
-> **Renumbered on 20 Oct 2026 (the user's call):** Products was built as **Phase 3**, ahead of Billing, and Billing became **Phase 4**. Stock adjustment and movement history from row 4 stay with the Inventory module. The table below keeps the original plan for reference; §9 logs the order actually built.
+> **Renumbered on 20 Oct 2026 (the user's call):** Products was built as **Phase 3**, ahead of Billing, and Billing became **Phase 4**. **Phase 5** covered Transactions and an initial sales summary only; voids and Returns are not yet scheduled. Stock adjustment and movement history from row 4 stay with the Inventory module. The table below keeps the original plan for reference; §9 logs the order actually built.
 
 | Phase | Scope | Exit criteria |
 |---|---|---|
@@ -453,11 +453,11 @@ Every checklist assumes the cross-cutting checks pass:
 - [ ] Every change appears in movement history with its type, delta, linked reference, actor, time and reason.
 
 ### Transactions
-- [ ] Search by invoice number or customer, and filter by date, method, cashier and status.
-- [ ] Amounts are right-aligned, and statuses use a consistent badge.
-- [ ] The detail page uses an invoice layout: lines, discounts, tax breakdown, payments with a "manually recorded" label, and linked returns.
-- [ ] There's no edit action. Voiding requires the permission, a reason and a confirmation, and creates an audit entry.
-- [ ] Reprint works from the detail page.
+- [x] Search by invoice number or customer, and filter by date, method, cashier and status. *Invoice number, date range, cashier and method are built. Customer waits for customer attach at checkout; status has only one value (Completed) until voids exist, so it has no UI filter yet (the API accepts `status`).*
+- [x] Amounts are right-aligned, and statuses use a consistent badge.
+- [x] The detail page uses an invoice layout: lines, discounts, tax breakdown, payments with a "manually recorded" label, and linked returns. *Linked returns wait for the Returns module.*
+- [ ] There's no edit action. Voiding requires the permission, a reason and a confirmation, and creates an audit entry. *No edit action (the API returns 405). Voiding isn't built yet.*
+- [x] Reprint works from the detail page.
 
 ### Returns
 - [ ] The wizard starts from an invoice (search or scan) and shows sold, already returned and eligible quantities for each line.
@@ -827,3 +827,57 @@ Each arrives with the phase that gives it real data.
 - **PIN lockout:** the counter lives in Django's cache (per process in development). Production should use a shared cache such as Redis.
 - **Concurrency:** the threaded last-unit test hasn't been run here (no Postgres available).
 - **Seed photos:** some demo photos are poor matches (for example "Floral Midi Dress"), and "Classic Chino" has none. That's seed data from Phase 3.
+
+### Phase 5: Transactions and sales history (done, 20 Oct 2026)
+
+Scope set by the user: the transactions list, transaction detail, receipt reprint and an initial sales summary. Voids, Returns, customer attach and a full reports module are not part of it.
+
+**Backend (`apps/sales`):**
+- **`GET /sales/`:** sales history, newest first, paginated (`page`, `page_size`, default 25).
+  - Filters: `q` (invoice number, partial), `date_from` and `date_to` (store dates in Asia/Kolkata, inclusive), `cashier`, `method` and `status`. A backwards range returns 400 on `date_to`.
+  - Each row has the invoice number, time, cashier, units sold, discount, total, payment method, `gateway_verified` and status.
+  - Same path as `POST /sales/` (checkout), which is unchanged.
+- **Access**, enforced in one place (`visible_sales`) for both list and detail:
+  - Admins and Senior cashiers see every sale.
+  - Cashiers see only their own, and a `cashier=` filter can't widen that.
+  - Another cashier's invoice, an unknown number or a malformed one all return 404. Deactivated accounts are signed out (403).
+- **`GET /sales/summary/` (admin only):** completed sales matching the same filters as the list.
+  - Returns the count, total, subtotal, discount and GST, plus groups by payment method (all three, zeros included), by store date and by cashier.
+  - Every group adds up to the headline figures. Figures are the totals saved on each bill.
+- **`GET /sales/cashiers/` (admin only):** staff who have recorded a sale, including deactivated accounts, for the cashier filter.
+- **Approver name snapshot:** the discount approver's name is now saved on the sale (`discount_approved_by_name`, migration `sales.0002`).
+  - Before this, the receipt read the approver's current name, so renaming the account rewrote old receipts. The new tests found this.
+  - The migration fills existing sales from the approver's current name, the best record left for them.
+- **Tests:** 27 new history tests cover sign-in and role access, own-sales scoping, unknown and malformed invoices, list fields, ordering and pagination, search, each filter, store-date boundaries, bad ranges, history unchanged after product, tax, store and approver changes, and reprinting writing nothing.
+  - The reprint test checks for no new sale, no stock movement, the same totals and time, and no invoice number used.
+  - The summary tests check totals, groups, filters, the empty summary, and saved rather than current prices.
+
+**Frontend (`features/transactions`):**
+- **`/admin/transactions`:**
+  - Search and filters live in the URL (`?q=&from=&to=&cashier=&method=&page=`).
+  - Summary cards (Completed sales, Recorded sales total, GST on these bills, Discounts given), each with its definition as a footnote.
+  - The list shows a table from `lg` and cards below that, so tablets never scroll sideways.
+  - Breakdown panels by payment method, day (the latest 14 days shown) and cashier.
+  - A note says the figures are recorded sales, not settled payments, and that returns aren't deducted.
+  - UPI and card are marked "not gateway-verified" in the list, the breakdown and the detail page.
+  - A backwards date range shows a warning instead of a request.
+- **`/admin/transactions/:invoiceNo`:** an invoice layout with Bill, Payment and Store (the snapshot), then the items sold, totals with CGST and SGST per rate, and the approver.
+  - There's no edit action.
+  - Malformed invoice numbers show not-found without a request.
+- **`/admin/transactions/:invoiceNo/receipt`:** reprints with the same `Receipt` component the till uses (moved to `features/billing/components/Receipt.tsx`). It reads the cached sale and sends no writes.
+  - The admin sidebar and topbar are hidden when printing.
+- **Shared changes:**
+  - A sale now also invalidates `sales.history` (lists, summaries, cashiers).
+  - `MEDIA.wide` (from `lg`) is added.
+  - The Inventory and Returns placeholders no longer claim a phase number.
+- **Tests:** 18 page tests cover access, list fields, server search, filters following into the summary, backwards ranges, URL cleaning, pagination, a page past the end, empty and filtered-empty states, list and summary errors with retry, phone cards, detail contents, unknown, malformed and failing invoices, and reprint (print called, only GETs, a single fetch).
+
+**Expected console errors in browser checks:** the 404 for the deliberately unknown invoice `LD-999999`, and the 403 and 404 responses from the deliberate cashier API probes.
+
+**Open:**
+- **Concurrency test:** the threaded last-unit test from Phase 4 still needs PostgreSQL. None is installed here: no Windows service or client, no Docker, and the WSL Ubuntu distribution has no PostgreSQL. It stays explicitly skipped, and SQLite results don't stand in for it.
+- **Discount approvals:** there's no separate audit trail yet (see the Phase 4 deviation). The approver is recorded on the sale.
+- **Seed photos:** the demo photo corrections (from Phase 4) are still open.
+- **Cashier history:** cashiers have no history page in the billing portal. The API already scopes `/sales/` to their own sales for when one is added.
+- **Not yet built:** voids, Returns (and so returns in the summary), customer search, and summary CSV export.
+- **Daily breakdown:** it lists only the latest 14 days with sales. Earlier days are reached with the date filter.

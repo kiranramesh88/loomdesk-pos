@@ -1,8 +1,10 @@
 import uuid
 
-from django.db.models import Exists, OuterRef, Prefetch, Q
+from django.db.models import Count, Exists, OuterRef, Prefetch, Q, Sum
+from django.db.models.functions import Coalesce, TruncDate
 from django.shortcuts import get_object_or_404
 from django_filters import rest_framework as filters
+from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import generics, status
 from rest_framework.exceptions import ValidationError
@@ -10,12 +12,12 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.models import Role, User
-from apps.accounts.permissions import IsStaffMember
+from apps.accounts.permissions import IsAdmin, IsStaffMember
 from apps.catalog.models import Category, Product, Variant
 from apps.store.models import StoreSettings
 
 from . import services
-from .models import Sale
+from .models import Payment, Sale
 from .pricing import tax_breakdown
 from .serializers import (
     ApproverSerializer,
@@ -24,7 +26,10 @@ from .serializers import (
     CheckoutSerializer,
     BillSerializer,
     QuoteSerializer,
+    SaleCashierSerializer,
+    SaleListItemSerializer,
     SaleSerializer,
+    SalesSummarySerializer,
     SellableProductSerializer,
 )
 
@@ -146,18 +151,54 @@ IDEMPOTENCY_HEADER = OpenApiParameter(
 
 
 def sale_queryset():
-    return Sale.objects.select_related("payment", "discount_approved_by").prefetch_related("lines")
+    return Sale.objects.select_related("payment").prefetch_related("lines")
 
 
-class SaleCreateView(APIView):
-    """Complete a sale. 201 when written; 200 when the same Idempotency-Key was already used for this bill."""
+def visible_sales(user, queryset=None):
+    """Sales this user may read. Cashiers see their own; Senior cashiers and Admins see every sale."""
+    sales = Sale.objects.all() if queryset is None else queryset
+    return sales if user.can_approve_discounts else sales.filter(cashier=user)
+
+
+class SaleFilter(filters.FilterSet):
+    q = filters.CharFilter(method="search", label="Invoice number (or part of it)")
+    date_from = filters.DateFilter(field_name="created_at", lookup_expr="date__gte", label="On or after (store time)")
+    date_to = filters.DateFilter(field_name="created_at", lookup_expr="date__lte", label="On or before (store time)")
+    cashier = filters.NumberFilter(field_name="cashier_id")
+    method = filters.ChoiceFilter(field_name="payment__method", choices=Payment.Method.choices)
+    status = filters.ChoiceFilter(choices=Sale.Status.choices)
+
+    def search(self, queryset, name, value):
+        value = value.strip()
+        return queryset.filter(invoice_no__icontains=value) if value else queryset
+
+    def filter_queryset(self, queryset):
+        start, end = self.form.cleaned_data.get("date_from"), self.form.cleaned_data.get("date_to")
+        if start and end and start > end:
+            raise ValidationError({"date_to": ["The end date is before the start date."]})
+        return super().filter_queryset(queryset)
+
+
+class SaleListCreateView(generics.ListAPIView):
+    """GET: sales history, newest first. POST: complete a sale.
+
+    The list is scoped like receipts: cashiers get their own sales, Senior cashiers and Admins get all.
+    """
 
     permission_classes = [IsStaffMember]
+    serializer_class = SaleListItemSerializer
+    filterset_class = SaleFilter
+
+    def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):  # schema generation has no signed-in user
+            return Sale.objects.none()
+        return visible_sales(self.request.user).select_related("payment").annotate(item_count=Sum("lines__quantity")).order_by("-created_at", "-id")
 
     @extend_schema(
         request=CheckoutSerializer,
         parameters=[IDEMPOTENCY_HEADER],
         responses={201: SaleSerializer, 200: SaleSerializer},
+        description="Complete a sale. 201 when written; 200 when the same Idempotency-Key was already used for this bill.",
     )
     def post(self, request):
         try:
@@ -178,7 +219,80 @@ class SaleDetailView(APIView):
 
     @extend_schema(responses=SaleSerializer)
     def get(self, request, invoice_no: str):
-        sales = sale_queryset()
-        if not request.user.can_approve_discounts:
-            sales = sales.filter(cashier=request.user)
-        return Response(SaleSerializer(get_object_or_404(sales, invoice_no=invoice_no)).data)
+        sale = get_object_or_404(visible_sales(request.user, sale_queryset()), invoice_no=invoice_no)
+        return Response(SaleSerializer(sale).data)
+
+
+def _group(sales, *fields):
+    # order_by() first: Sale's default ordering would otherwise join the GROUP BY and split the groups.
+    return sales.order_by().values(*fields).annotate(sale_count=Count("id"), total_paise=Sum("total_paise"))
+
+
+class SalesSummaryView(generics.GenericAPIView):
+    """Admin summary of completed sales matching the same filters as the list.
+
+    Totals are the saved bill totals (after discounts, GST included). UPI and card amounts are what the
+    cashier recorded; none is gateway-verified, so this is not a settlement figure. Returns are not
+    deducted yet because the returns module does not exist.
+    """
+
+    permission_classes = [IsAdmin]
+    filterset_class = SaleFilter
+    pagination_class = None
+
+    def get_queryset(self):
+        return Sale.objects.filter(status=Sale.Status.COMPLETED)
+
+    @extend_schema(
+        responses=SalesSummarySerializer,
+        # The list's filters, declared by hand: drf-spectacular only adds filterset parameters to list views.
+        parameters=[
+            OpenApiParameter("q", str, description="Invoice number (or part of it)"),
+            OpenApiParameter("date_from", OpenApiTypes.DATE, description="On or after (store time)"),
+            OpenApiParameter("date_to", OpenApiTypes.DATE, description="On or before (store time)"),
+            OpenApiParameter("cashier", int),
+            OpenApiParameter("method", str, enum=Payment.Method.values),
+        ],
+    )
+    def get(self, request):
+        sales = self.filter_queryset(self.get_queryset())
+        totals = sales.aggregate(
+            sale_count=Count("id"),
+            **{f: Coalesce(Sum(f), 0) for f in ("total_paise", "subtotal_paise", "discount_paise", "tax_paise")},
+        )
+        methods = {row["payment__method"]: row for row in _group(sales, "payment__method")}
+        days = _group(sales.annotate(date=TruncDate("created_at")), "date").order_by("-date")
+        cashiers = _group(sales, "cashier_id", "cashier__full_name").order_by("-total_paise", "cashier__full_name")
+        summary = {
+            **totals,
+            "by_method": [
+                {
+                    "method": method,
+                    "sale_count": methods.get(method, {}).get("sale_count", 0),
+                    "total_paise": methods.get(method, {}).get("total_paise", 0),
+                }
+                for method in Payment.Method.values
+            ],
+            "by_day": [{"date": r["date"], "sale_count": r["sale_count"], "total_paise": r["total_paise"]} for r in days],
+            "by_cashier": [
+                {
+                    "cashier": r["cashier_id"],
+                    "cashier_name": r["cashier__full_name"],
+                    "sale_count": r["sale_count"],
+                    "total_paise": r["total_paise"],
+                }
+                for r in cashiers
+            ],
+        }
+        return Response(SalesSummarySerializer(summary).data)
+
+
+class SaleCashierListView(generics.ListAPIView):
+    """Staff who have recorded at least one sale, including deactivated accounts, for the cashier filter."""
+
+    permission_classes = [IsAdmin]
+    serializer_class = SaleCashierSerializer
+    pagination_class = None
+
+    def get_queryset(self):
+        return User.objects.filter(Exists(Sale.objects.filter(cashier=OuterRef("pk")))).order_by("full_name", "id")

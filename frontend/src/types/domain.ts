@@ -35,6 +35,11 @@ export type DiscountKind = Schemas['DiscountKindEnum']
 export type PaymentMethod = Schemas['PaymentMethodEnum']
 export type Sale = Schemas['Sale']
 export type SaleLine = Schemas['SaleLine']
+export type SaleStatus = Schemas['SaleStatusEnum']
+export type SaleListItem = Schemas['SaleListItem']
+export type SalePage = Schemas['PaginatedSaleListItemList']
+export type SaleCashier = Schemas['SaleCashier']
+export type SalesSummary = Schemas['SalesSummary']
 
 export const ROLE_LABELS: Record<Role, string> = {
   admin: 'Admin',

@@ -25,7 +25,7 @@ export function AdminLayout() {
   return (
     // Here rather than in AppProviders so Radix's positioning code stays out of the main bundle.
     <TooltipProvider delayDuration={300}>
-      <div className="flex min-h-dvh bg-bg">
+      <div className="flex min-h-dvh bg-bg print:bg-white">
         <a
           href="#main"
           onClick={(event) => {
@@ -43,7 +43,7 @@ export function AdminLayout() {
             ref={mainRef}
             id="main"
             tabIndex={-1}
-            className="mx-auto w-full max-w-[1680px] px-3 pt-4 pb-10 outline-none sm:px-[15px] sm:pt-[19px] md:px-[22px] md:pt-[23px] lg:px-[30px] lg:pt-[27px]"
+            className="mx-auto w-full max-w-[1680px] px-3 pt-4 pb-10 outline-none sm:px-[15px] sm:pt-[19px] md:px-[22px] md:pt-[23px] lg:px-[30px] lg:pt-[27px] print:p-0"
           >
             <Suspense fallback={<AdminPageSkeleton />}>
               <Outlet />
