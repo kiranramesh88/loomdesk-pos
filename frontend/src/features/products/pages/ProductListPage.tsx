@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, PackageSearch, Pencil, Plus } from 'lucide-react'
+import { PackageSearch, Pencil, Plus } from 'lucide-react'
 import { useCallback } from 'react'
 import { Link, useSearchParams } from 'react-router'
 
@@ -9,6 +9,7 @@ import { ButtonLink } from '@/components/ui/ButtonLink'
 import { Card } from '@/components/ui/Card'
 import { DataTable, type Column } from '@/components/ui/DataTable'
 import { PageHeader } from '@/components/ui/PageHeader'
+import { Pagination } from '@/components/ui/Pagination'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { formatMoney } from '@/lib/money'
@@ -227,49 +228,12 @@ export function ProductListPage() {
             count={data.count}
             busy={products.isPlaceholderData}
             onPage={(page) => update({ page })}
+            pageSize={PAGE_SIZE}
+            label="Catalogue pages"
+            noun="products"
           />
         )}
       </Card>
     </>
-  )
-}
-
-function Pagination({
-  page,
-  count,
-  busy,
-  onPage,
-}: {
-  page: number
-  count: number
-  busy: boolean
-  onPage: (page: number) => void
-}) {
-  const pages = Math.max(1, Math.ceil(count / PAGE_SIZE))
-  const first = (page - 1) * PAGE_SIZE + 1
-  const last = Math.min(page * PAGE_SIZE, count)
-  return (
-    <nav
-      aria-label="Catalogue pages"
-      className="flex flex-wrap items-center justify-between gap-3 border-t border-line-soft px-4 py-3 sm:px-5"
-    >
-      <p className="type-helper tabular" aria-live="polite">
-        {busy ? 'Loading…' : `Showing ${first}–${last} of ${count.toLocaleString('en-IN')} products`}
-      </p>
-      {pages > 1 && (
-        <div className="flex items-center gap-2">
-          <span className="type-helper tabular">
-            Page {page} of {pages}
-          </span>
-          <Button size="sm" icon={<ChevronLeft />} disabled={page <= 1 || busy} onClick={() => onPage(page - 1)}>
-            Previous
-          </Button>
-          <Button size="sm" disabled={page >= pages || busy} onClick={() => onPage(page + 1)}>
-            Next
-            <ChevronRight />
-          </Button>
-        </div>
-      )}
-    </nav>
   )
 }

@@ -63,7 +63,7 @@ These can't be carried over from the prototype.
 
 Each phase ends in something that can be demoed. The backend and frontend for a module ship together, following the spec's order in §10. The big change from that order is that billing comes early.
 
-> **Renumbered on 20 Oct 2026 (the user's call):** Products was built as **Phase 3**, ahead of Billing, and Billing became **Phase 4**. **Phase 5** covered Transactions and an initial sales summary only; voids and Returns are not yet scheduled. Stock adjustment and movement history from row 4 stay with the Inventory module. The table below keeps the original plan for reference; §9 logs the order actually built.
+> **Renumbered on 20 Oct 2026 (the user's call):** Products was built as **Phase 3**, ahead of Billing, and Billing became **Phase 4**. **Phase 5** covered Transactions and an initial sales summary only; voids and Returns are not yet scheduled. **Phase 6** is the Inventory module: stock levels, adjustments and movement history from row 4. The table below keeps the original plan for reference; §9 logs the order actually built.
 
 | Phase | Scope | Exit criteria |
 |---|---|---|
@@ -104,8 +104,8 @@ Every route is a client route under one SPA. Django serves `index.html` for any 
 | `/admin/products/new` | `ProductFormPage` |
 | `/admin/products/:id` | `ProductDetailPage` |
 | `/admin/products/:id/edit` | `ProductFormPage` |
-| `/admin/inventory` | `InventoryPage` (`?q=&state=low|out`); the adjustment form is a dialog |
-| `/admin/inventory/movements` | `StockMovementsPage` (`?variant=&type=&from=&to=`) |
+| `/admin/inventory` | `InventoryPage` (`?q=&category=&state=&status=&sort=&page=`); the adjustment form is a dialog |
+| `/admin/inventory/movements` | `StockMovementsPage` (`?q=&variant=&type=&from=&to=&page=`) |
 | `/admin/transactions` | `TransactionListPage` (`?q=&from=&to=&method=&cashier=&status=`) |
 | `/admin/transactions/:invoiceNo` | `TransactionDetailPage` |
 | `/admin/returns` | `ReturnListPage` |
@@ -447,10 +447,10 @@ Every checklist assumes the cross-cutting checks pass:
 - [x] Cost and margin are visible only to Admin. *The whole catalogue API is admin-only for now.*
 
 ### Inventory
-- [ ] The summary shows tracked variant, low-stock and out-of-stock counts.
-- [ ] The adjustment form has a variant, a type (add, remove or set counted), quantity and reason. A reason is required for remove and set. It previews current → resulting quantity before confirming.
-- [ ] Negative stock is rejected by the server.
-- [ ] Every change appears in movement history with its type, delta, linked reference, actor, time and reason.
+- [x] The summary shows tracked variant, low-stock and out-of-stock counts.
+- [x] The adjustment form has a variant, a type (add, remove or set counted), quantity and reason. A reason is required for remove and set. It previews current → resulting quantity before confirming. (Phase 6 requires a reason for every adjustment, including add.)
+- [x] Negative stock is rejected by the server.
+- [x] Every change appears in movement history with its type, delta, linked reference, actor, time and reason. Sale references link to the transaction; purchases and returns will link once those modules exist.
 
 ### Transactions
 - [x] Search by invoice number or customer, and filter by date, method, cashier and status. *Invoice number, date range, cashier and method are built. Customer waits for customer attach at checkout; status has only one value (Completed) until voids exist, so it has no UI filter yet (the API accepts `status`).*
@@ -908,3 +908,51 @@ Run against a local PostgreSQL 18.6 with a dedicated `loomdesk` role that has `L
   - Give the app a dedicated role that owns only its database, with no `CREATEDB`, superuser or `CREATEROLE`. Test and dev roles must never point at production.
   - Use a strong generated password, keep the database off the public network, and require TLS if it runs on another host (not yet configurable in settings).
   - Use a shared cache such as Redis for the PIN lockout (see Phase 4).
+
+### Local development database (20 Oct 2026)
+
+Approved by the user after the PostgreSQL validation above.
+- Before creating anything: no `loomdesk` database existed (the server held only `postgres`), and `db.sqlite3` was intact and fully migrated.
+- Created `loomdesk` (owner `loomdesk`, UTF8, from `template0`), ran `migrate` (27 migrations), and confirmed the connection as `loomdesk` on PostgreSQL 18.6.
+- Ran `seed_demo` without `--reset`, after confirming the target was PostgreSQL `loomdesk` with no products.
+- Plain `manage.py` commands now use this database. `DB_ENGINE=sqlite` still selects `db.sqlite3`, which was not modified (same hash before and after).
+
+### Phase 6: Inventory (done, 20 Oct 2026)
+
+Scope set by the user: an inventory overview with variant- and product-level quantities, search, filters and server pagination, stock adjustments with reasons, staff and time, movement history, low-stock indicators from each variant's reorder level, and desktop and mobile layouts. Suppliers, purchase orders, returns and advanced reporting are not part of it.
+
+**Backend (`apps/inventory`, all admin-only via `IsAdmin`):**
+- **`GET /inventory/variants/`:** one row per variant, including inactive variants and products so stock on them stays visible.
+  - Each row has on hand, reorder level, stock state, whether it's sellable, the product's total on hand, and the latest movement's type and time. No prices or costs.
+  - Filters: `q` (product name or SKU, variant SKU, exact barcode), `category`, `state` (`in_stock`, `low_stock`, `out_of_stock`) and `status` (`active` = sellable, `inactive`). Ordering by `product`, `stock` or `moved`, with an id tiebreak so pages stay stable. Paginated like every list.
+  - `GET /inventory/variants/{id}/` returns one row.
+- **`GET /inventory/summary/`:** tracked variants (active variants of active products), low stock, out of stock and units on hand. Low means 1 to the reorder level; out means 0. This is the same rule as `Variant.stock_state`.
+- **`POST /inventory/adjustments/`:** `{variant, kind: add|remove|count, quantity, reason, expected_on_hand}`.
+  - `services.adjust_stock()` locks the variant row, compares it with `expected_on_hand` (409 `stock_changed` if a sale or another adjustment moved it since the preview), then writes one movement through `record_movement()`, all in one transaction.
+  - Negative results are refused (400 on `quantity`). Add and remove need at least 1 unit; a count may match current stock and records a zero change. Quantities are whole numbers up to 10,000. Every kind needs a reason of at least 3 characters.
+  - The signed-in admin is the actor; the movement's time is the server's.
+  - Inactive items can still be adjusted, so discontinued stock can be written off.
+- **`GET /inventory/movements/`:** the ledger, newest first, with variant and product, type, change, balance after, reason, reference and actor. Filters: `q` (product, variant SKU or reference), `variant`, `type`, `date_from` and `date_to` (store dates, inclusive; a backwards range is a 400). There are no write methods.
+- **Tests (`apps/inventory/test_api.py`, 46):** sign-in and role access for every endpoint (cashiers and senior cashiers get 403, and a cashier adjustment changes nothing), row fields, product totals, search, each filter, per-variant reorder levels, ordering and pagination, the summary, add, remove and count with their movements and actor, zero-change counts, negative stock, invalid input changing nothing, stale previews (409), write-offs on inactive items, a failed write rolling back the whole adjustment, earlier history left untouched, movement fields, filters and pagination, and append-only endpoints.
+  - **Concurrency (PostgreSQL only):** four admins remove the last two units at once. Exactly one succeeds, three get 409, stock ends at 0, and one removal is recorded.
+
+**Frontend (`features/inventory`):**
+- **`/admin/inventory`:** four summary figures with definitions, a toolbar (search, category, stock level, sellable or inactive, sort) mirrored in the URL, a table from `lg` and cards below, low and out-of-stock badges as text, a "Not on sale" badge for inactive items, and links to each variant's history.
+- **Adjust stock dialog:** the variant with its live on-hand figure, add, remove or set counted, quantity, reason, and a current → result preview. It checks input and negative results before sending, and sends the previewed figure. On `stock_changed` it explains what moved and refreshes the figure, so the admin confirms again knowingly. Nothing is optimistic: a success invalidates inventory, the admin catalogue and the till's catalogue.
+- **`/admin/inventory/movements`:** the ledger with search, type and date filters, the same table and card split, signed changes, invoice references linking to the transaction, and "System" for movements without an actor. With `?variant=` it shows that variant's stock and an Adjust action.
+- **Shared changes:**
+  - `components/ui/Pagination.tsx` replaces identical copies in Products and Transactions.
+  - `lib/useDebouncedSearch.ts` holds the debounced, URL-synced search used by both inventory toolbars. The Products and Transactions toolbars keep their own copy for now.
+  - Product saves and sales now also invalidate `inventory`.
+  - Inventory takes the Phase 6 badge in the nav; Suppliers and Staff no longer claim it.
+- **Tests (`inventory.test.tsx`, 15):** cashier access, row and summary contents, filters and search in the URL and request, pagination, phone cards, a list error that keeps the page, client validation and preview, the request body, the success toast and refetch, a stale preview (409) refreshing the figure, server field errors, movement fields and links, the single-variant view, backwards ranges and unknown variants, and URL and quantity parsing.
+
+**Browser check (PostgreSQL dev database, 1440, 1120, 820, 390 and 360 wide):** 28 of 30 checks passed.
+- Passed: summary matching the API, the low-stock filter, pagination, client-side negative-stock blocking, the preview, a stale preview refused after a real concurrent add and then confirmed, the toast, history with reason and actor, no page overflow and the right table or card layout at every width, the dialog at phone width, and cashiers sent to 403 with API reads and adjustments refused.
+- Not passed: the sale-reference link wasn't exercised because the new dev database has no sales yet (covered by the page test). The console showed the expected 409 from the deliberate stale-preview check.
+- **Dev data side effect:** two early runs of the check script read the wrong figure and recorded two real −1 adjustments on `SH-CT-001-S-BLU`. They were reversed with a recorded +2 ("Browser check: reverses test removals #66 and #67"). Stock is back to its seeded figure, and the ledger keeps all the browser-check movements, as an append-only ledger should.
+
+**Open:**
+- Reorder levels are edited on the product form; there's no bulk edit.
+- No CSV export of stock or movements.
+- Purchases and returns don't exist yet, so their movement types never appear.

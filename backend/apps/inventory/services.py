@@ -1,4 +1,6 @@
 from django.db import transaction
+from rest_framework import status
+from rest_framework.exceptions import APIException, ValidationError
 
 from apps.catalog.models import Variant
 
@@ -45,3 +47,37 @@ def record_movement(
         reference=reference,
         actor=actor,
     )
+
+
+class StockChanged(APIException):
+    """Stock moved (a sale, another adjustment) after the adjustment was previewed."""
+
+    status_code = status.HTTP_409_CONFLICT
+    default_code = "stock_changed"
+
+
+ADJUSTMENT_TYPES = {
+    "add": StockMovement.Type.ADJUST_ADD,
+    "remove": StockMovement.Type.ADJUST_REMOVE,
+    "count": StockMovement.Type.COUNT,
+}
+
+
+@transaction.atomic
+def adjust_stock(*, variant: Variant, kind: str, quantity: int, reason: str, expected_on_hand: int, actor) -> StockMovement:
+    """A manual adjustment by staff, recorded as one movement. All or nothing.
+
+    The variant is locked first, so the figure the user previewed is compared with the real one
+    under the same lock that writes the movement: a sale in between can't be silently overwritten.
+    """
+    locked = Variant.objects.select_for_update().get(pk=variant.pk)
+    if locked.on_hand != expected_on_hand:
+        raise StockChanged(
+            f"Stock changed from {expected_on_hand} to {locked.on_hand} since this adjustment was opened. "
+            "Check the new figure and confirm again."
+        )
+    delta = {"add": quantity, "remove": -quantity, "count": quantity - locked.on_hand}[kind]
+    try:
+        return record_movement(variant=locked, type=ADJUSTMENT_TYPES[kind], quantity_delta=delta, actor=actor, reason=reason)
+    except StockError as error:
+        raise ValidationError({"quantity": [str(error)]}) from None

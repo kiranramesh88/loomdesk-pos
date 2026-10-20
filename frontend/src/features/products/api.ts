@@ -53,11 +53,12 @@ export function useTaxRules() {
   })
 }
 
-/** Product saves change stock (opening stock), so lists, details and future inventory views refetch. */
+/** Product saves change stock (opening stock), variants and reorder levels, so lists and inventory refetch. */
 function useSaved() {
   const client = useQueryClient()
   return (product: ProductDetail) => {
     client.setQueryData(queryKeys.products.detail(product.id), product)
+    void client.invalidateQueries({ queryKey: queryKeys.inventory.all })
     return client.invalidateQueries({ queryKey: queryKeys.products.lists })
   }
 }

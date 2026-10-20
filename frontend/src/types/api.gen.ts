@@ -249,6 +249,89 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/inventory/adjustments/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Record a manual adjustment (add, remove or counted quantity) as one stock movement. */
+        post: operations["inventory_adjustments_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/movements/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The stock ledger, newest first. Read-only: movements are never edited or deleted. */
+        get: operations["inventory_movements_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/summary/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["inventory_summary_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/variants/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Variant-level stock for every product, active or not, so stock on deactivated items stays visible. */
+        get: operations["inventory_variants_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/variants/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["inventory_variants_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/": {
         parameters: {
             query?: never;
@@ -431,6 +514,58 @@ export interface components {
          * @enum {string}
          */
         DiscountKindEnum: "amount" | "percent";
+        /** @description One entry of the append-only stock ledger. */
+        InventoryMovement: {
+            readonly id: number;
+            /** Format: date-time */
+            readonly created_at: string;
+            readonly type: components["schemas"]["StockMovementTypeEnum"];
+            readonly type_label: string;
+            readonly quantity_delta: number;
+            readonly balance_after: number;
+            readonly reason: string;
+            readonly reference: string;
+            readonly actor_name: string | null;
+            readonly variant: components["schemas"]["MovementVariant"];
+        };
+        InventoryProduct: {
+            id: number;
+            name: string;
+            sku: string;
+            status: string;
+            category: string;
+            readonly image_url: string | null;
+        };
+        InventorySummary: {
+            /** @description Active variants of active products. */
+            tracked_variants: number;
+            /** @description Tracked variants with 1 to reorder-level units. */
+            low_stock: number;
+            /** @description Tracked variants with no units. */
+            out_of_stock: number;
+            /** @description Units across tracked variants. */
+            units_on_hand: number;
+        };
+        /** @description A stock-tracked variant with its product, stock state and most recent movement. */
+        InventoryVariant: {
+            readonly id: number;
+            readonly sku: string;
+            readonly size: string;
+            readonly colour: string;
+            readonly barcode: string | null;
+            readonly on_hand: number;
+            readonly reorder_level: number;
+            readonly stock_state: components["schemas"]["StockStateEnum"];
+            readonly is_active: boolean;
+            /** @description Active variant of an active product. */
+            readonly sellable: boolean;
+            readonly product: components["schemas"]["InventoryProduct"];
+            /** @description Units across all of the product's variants. */
+            readonly product_on_hand: number;
+            /** Format: date-time */
+            readonly last_movement_at: string | null;
+            readonly last_movement_type: (components["schemas"]["StockMovementTypeEnum"] | components["schemas"]["NullEnum"]) | null;
+        };
         LoginRequest: {
             /** Format: email */
             email: string;
@@ -452,6 +587,46 @@ export interface components {
             sale_count: number;
             total_paise: number;
             method: components["schemas"]["PaymentMethodEnum"];
+        };
+        MovementVariant: {
+            id: number;
+            sku: string;
+            size: string;
+            colour: string;
+            product_id: number;
+            product_name: string;
+        };
+        /** @enum {unknown} */
+        NullEnum: null;
+        PaginatedInventoryMovementList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["InventoryMovement"][];
+        };
+        PaginatedInventoryVariantList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["InventoryVariant"][];
         };
         PaginatedProductListList: {
             /** @example 123 */
@@ -748,6 +923,27 @@ export interface components {
         };
         Session: {
             user: components["schemas"]["Me"] | null;
+        };
+        /**
+         * @description * `add` - Add stock
+         *     * `remove` - Remove stock
+         *     * `count` - Set counted quantity
+         * @enum {string}
+         */
+        StockAdjustmentKindEnum: "add" | "remove" | "count";
+        StockAdjustmentRequest: {
+            variant: number;
+            kind: components["schemas"]["StockAdjustmentKindEnum"];
+            /** @description Units to add or remove, or the counted quantity. */
+            quantity: number;
+            /** @description Why stock changed; recorded on the movement. */
+            reason: string;
+            /** @description The on-hand figure the adjustment was previewed against. */
+            expected_on_hand: number;
+        };
+        StockAdjustmentResult: {
+            movement: components["schemas"]["InventoryMovement"];
+            variant: components["schemas"]["InventoryVariant"];
         };
         StockMovement: {
             readonly id: number;
@@ -1240,6 +1436,161 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaxRule"][];
+                };
+            };
+        };
+    };
+    inventory_adjustments_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StockAdjustmentRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["StockAdjustmentRequest"];
+                "multipart/form-data": components["schemas"]["StockAdjustmentRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StockAdjustmentResult"];
+                };
+            };
+        };
+    };
+    inventory_movements_list: {
+        parameters: {
+            query?: {
+                /** @description On or after (store time) */
+                date_from?: string;
+                /** @description On or before (store time) */
+                date_to?: string;
+                /** @description A page number within the paginated result set. */
+                page?: number;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description Product name, variant SKU or reference */
+                q?: string;
+                /**
+                 * @description * `opening` - Opening stock
+                 *     * `purchase` - Purchase received
+                 *     * `sale` - Sale
+                 *     * `return` - Customer return
+                 *     * `adjust_add` - Adjustment (add)
+                 *     * `adjust_remove` - Adjustment (remove)
+                 *     * `count` - Stock count
+                 */
+                type?: "adjust_add" | "adjust_remove" | "count" | "opening" | "purchase" | "return" | "sale";
+                variant?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedInventoryMovementList"];
+                };
+            };
+        };
+    };
+    inventory_summary_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventorySummary"];
+                };
+            };
+        };
+    };
+    inventory_variants_list: {
+        parameters: {
+            query?: {
+                category?: number;
+                /**
+                 * @description Ordering
+                 *
+                 *     * `product` - Product
+                 *     * `-product` - Product (descending)
+                 *     * `stock` - Stock
+                 *     * `-stock` - Stock (descending)
+                 *     * `moved` - Moved
+                 *     * `-moved` - Moved (descending)
+                 */
+                ordering?: ("-moved" | "-product" | "-stock" | "moved" | "product" | "stock")[];
+                /** @description A page number within the paginated result set. */
+                page?: number;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description Product name or SKU, variant SKU, or exact barcode */
+                q?: string;
+                /**
+                 * @description * `in_stock` - In stock
+                 *     * `low_stock` - Low stock
+                 *     * `out_of_stock` - Out of stock
+                 */
+                state?: "in_stock" | "low_stock" | "out_of_stock";
+                /**
+                 * @description * `active` - Sellable
+                 *     * `inactive` - Inactive variant or product
+                 */
+                status?: "active" | "inactive";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedInventoryVariantList"];
+                };
+            };
+        };
+    };
+    inventory_variants_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryVariant"];
                 };
             };
         };

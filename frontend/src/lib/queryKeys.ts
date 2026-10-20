@@ -19,6 +19,14 @@ export const queryKeys = {
     categories: ['catalog', 'categories'] as const,
     taxRules: ['catalog', 'tax-rules'] as const,
   },
+  inventory: {
+    /** Stock levels, summaries and movements: every sale, product save and adjustment invalidates this prefix. */
+    all: ['inventory'] as const,
+    summary: ['inventory', 'summary'] as const,
+    list: (params: Record<string, string>) => ['inventory', 'list', params] as const,
+    variant: (id: number) => ['inventory', 'variant', id] as const,
+    movements: (params: Record<string, string>) => ['inventory', 'movements', params] as const,
+  },
   billing: {
     settings: ['billing', 'settings'] as const,
     categories: ['billing', 'categories'] as const,

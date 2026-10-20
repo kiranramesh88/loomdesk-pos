@@ -435,6 +435,222 @@ paths:
                 items:
                   $ref: '#/components/schemas/TaxRule'
           description: ''
+  /api/v1/inventory/adjustments/:
+    post:
+      operationId: inventory_adjustments_create
+      description: Record a manual adjustment (add, remove or counted quantity) as
+        one stock movement.
+      tags:
+      - inventory
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StockAdjustmentRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StockAdjustmentRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StockAdjustmentRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockAdjustmentResult'
+          description: ''
+  /api/v1/inventory/movements/:
+    get:
+      operationId: inventory_movements_list
+      description: 'The stock ledger, newest first. Read-only: movements are never
+        edited or deleted.'
+      parameters:
+      - in: query
+        name: date_from
+        schema:
+          type: string
+          format: date
+        description: On or after (store time)
+      - in: query
+        name: date_to
+        schema:
+          type: string
+          format: date
+        description: On or before (store time)
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: q
+        schema:
+          type: string
+        description: Product name, variant SKU or reference
+      - in: query
+        name: type
+        schema:
+          type: string
+          enum:
+          - adjust_add
+          - adjust_remove
+          - count
+          - opening
+          - purchase
+          - return
+          - sale
+        description: |-
+          * `opening` - Opening stock
+          * `purchase` - Purchase received
+          * `sale` - Sale
+          * `return` - Customer return
+          * `adjust_add` - Adjustment (add)
+          * `adjust_remove` - Adjustment (remove)
+          * `count` - Stock count
+      - in: query
+        name: variant
+        schema:
+          type: number
+      tags:
+      - inventory
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedInventoryMovementList'
+          description: ''
+  /api/v1/inventory/summary/:
+    get:
+      operationId: inventory_summary_retrieve
+      tags:
+      - inventory
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventorySummary'
+          description: ''
+  /api/v1/inventory/variants/:
+    get:
+      operationId: inventory_variants_list
+      description: Variant-level stock for every product, active or not, so stock
+        on deactivated items stays visible.
+      parameters:
+      - in: query
+        name: category
+        schema:
+          type: integer
+      - in: query
+        name: ordering
+        schema:
+          type: array
+          items:
+            type: string
+            enum:
+            - -moved
+            - -product
+            - -stock
+            - moved
+            - product
+            - stock
+        description: |-
+          Ordering
+
+          * `product` - Product
+          * `-product` - Product (descending)
+          * `stock` - Stock
+          * `-stock` - Stock (descending)
+          * `moved` - Moved
+          * `-moved` - Moved (descending)
+        explode: false
+        style: form
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: q
+        schema:
+          type: string
+        description: Product name or SKU, variant SKU, or exact barcode
+      - in: query
+        name: state
+        schema:
+          type: string
+          enum:
+          - in_stock
+          - low_stock
+          - out_of_stock
+        description: |-
+          * `in_stock` - In stock
+          * `low_stock` - Low stock
+          * `out_of_stock` - Out of stock
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - active
+          - inactive
+        description: |-
+          * `active` - Sellable
+          * `inactive` - Inactive variant or product
+      tags:
+      - inventory
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedInventoryVariantList'
+          description: ''
+  /api/v1/inventory/variants/{id}/:
+    get:
+      operationId: inventory_variants_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - inventory
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryVariant'
+          description: ''
   /api/v1/sales/:
     get:
       operationId: sales_list
@@ -869,6 +1085,171 @@ components:
       description: |-
         * `amount` - amount
         * `percent` - percent
+    InventoryMovement:
+      type: object
+      description: One entry of the append-only stock ledger.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        type:
+          allOf:
+          - $ref: '#/components/schemas/StockMovementTypeEnum'
+          readOnly: true
+        type_label:
+          type: string
+          readOnly: true
+        quantity_delta:
+          type: integer
+          readOnly: true
+        balance_after:
+          type: integer
+          readOnly: true
+        reason:
+          type: string
+          readOnly: true
+        reference:
+          type: string
+          readOnly: true
+        actor_name:
+          type: string
+          nullable: true
+          readOnly: true
+        variant:
+          allOf:
+          - $ref: '#/components/schemas/MovementVariant'
+          readOnly: true
+      required:
+      - actor_name
+      - balance_after
+      - created_at
+      - id
+      - quantity_delta
+      - reason
+      - reference
+      - type
+      - type_label
+      - variant
+    InventoryProduct:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        sku:
+          type: string
+        status:
+          type: string
+        category:
+          type: string
+        image_url:
+          type: string
+          nullable: true
+          readOnly: true
+      required:
+      - category
+      - id
+      - image_url
+      - name
+      - sku
+      - status
+    InventorySummary:
+      type: object
+      properties:
+        tracked_variants:
+          type: integer
+          description: Active variants of active products.
+        low_stock:
+          type: integer
+          description: Tracked variants with 1 to reorder-level units.
+        out_of_stock:
+          type: integer
+          description: Tracked variants with no units.
+        units_on_hand:
+          type: integer
+          description: Units across tracked variants.
+      required:
+      - low_stock
+      - out_of_stock
+      - tracked_variants
+      - units_on_hand
+    InventoryVariant:
+      type: object
+      description: A stock-tracked variant with its product, stock state and most
+        recent movement.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        sku:
+          type: string
+          readOnly: true
+        size:
+          type: string
+          readOnly: true
+        colour:
+          type: string
+          readOnly: true
+        barcode:
+          type: string
+          readOnly: true
+          nullable: true
+        on_hand:
+          type: integer
+          readOnly: true
+        reorder_level:
+          type: integer
+          readOnly: true
+        stock_state:
+          allOf:
+          - $ref: '#/components/schemas/StockStateEnum'
+          readOnly: true
+        is_active:
+          type: boolean
+          readOnly: true
+        sellable:
+          type: boolean
+          readOnly: true
+          description: Active variant of an active product.
+        product:
+          allOf:
+          - $ref: '#/components/schemas/InventoryProduct'
+          readOnly: true
+        product_on_hand:
+          type: integer
+          readOnly: true
+          description: Units across all of the product's variants.
+        last_movement_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        last_movement_type:
+          readOnly: true
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/StockMovementTypeEnum'
+          - $ref: '#/components/schemas/NullEnum'
+      required:
+      - barcode
+      - colour
+      - id
+      - is_active
+      - last_movement_at
+      - last_movement_type
+      - on_hand
+      - product
+      - product_on_hand
+      - reorder_level
+      - sellable
+      - size
+      - sku
+      - stock_state
     LoginRequest:
       type: object
       properties:
@@ -928,6 +1309,77 @@ components:
       - method
       - sale_count
       - total_paise
+    MovementVariant:
+      type: object
+      properties:
+        id:
+          type: integer
+        sku:
+          type: string
+        size:
+          type: string
+        colour:
+          type: string
+        product_id:
+          type: integer
+        product_name:
+          type: string
+      required:
+      - colour
+      - id
+      - product_id
+      - product_name
+      - size
+      - sku
+    NullEnum:
+      enum:
+      - null
+    PaginatedInventoryMovementList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/InventoryMovement'
+    PaginatedInventoryVariantList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/InventoryVariant'
     PaginatedProductListList:
       type: object
       required:
@@ -1770,6 +2222,53 @@ components:
           nullable: true
       required:
       - user
+    StockAdjustmentKindEnum:
+      enum:
+      - add
+      - remove
+      - count
+      type: string
+      description: |-
+        * `add` - Add stock
+        * `remove` - Remove stock
+        * `count` - Set counted quantity
+    StockAdjustmentRequest:
+      type: object
+      properties:
+        variant:
+          type: integer
+        kind:
+          $ref: '#/components/schemas/StockAdjustmentKindEnum'
+        quantity:
+          type: integer
+          maximum: 10000
+          minimum: 0
+          description: Units to add or remove, or the counted quantity.
+        reason:
+          type: string
+          minLength: 1
+          description: Why stock changed; recorded on the movement.
+          maxLength: 200
+        expected_on_hand:
+          type: integer
+          minimum: 0
+          description: The on-hand figure the adjustment was previewed against.
+      required:
+      - expected_on_hand
+      - kind
+      - quantity
+      - reason
+      - variant
+    StockAdjustmentResult:
+      type: object
+      properties:
+        movement:
+          $ref: '#/components/schemas/InventoryMovement'
+        variant:
+          $ref: '#/components/schemas/InventoryVariant'
+      required:
+      - movement
+      - variant
     StockMovement:
       type: object
       properties:

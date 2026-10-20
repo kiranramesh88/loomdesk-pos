@@ -9,6 +9,7 @@ import { AdminNotFound, AdminRouteError, AdminShellError } from '@/layouts/admin
 import { billingRoutes } from '@/features/billing/routes'
 import { productRoutes } from '@/features/products/routes'
 import { transactionRoutes } from '@/features/transactions/routes'
+import { inventoryRoutes } from '@/features/inventory/routes'
 import { ALL_ROLES } from '@/types/domain'
 
 import { HomeRedirect, RequireRole } from './guards'
@@ -35,6 +36,7 @@ const devRoutes: RouteObject[] = import.meta.env.DEV
 const MODULE_ROUTES: Partial<Record<string, RouteObject[]>> = {
   products: productRoutes,
   transactions: transactionRoutes,
+  inventory: inventoryRoutes,
 }
 
 // One route per nav item, so titles, active links and nested paths come from the same config.

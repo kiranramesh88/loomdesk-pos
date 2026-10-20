@@ -41,6 +41,16 @@ export type SalePage = Schemas['PaginatedSaleListItemList']
 export type SaleCashier = Schemas['SaleCashier']
 export type SalesSummary = Schemas['SalesSummary']
 
+export type InventoryVariant = Schemas['InventoryVariant']
+export type InventoryPage = Schemas['PaginatedInventoryVariantList']
+export type InventorySummary = Schemas['InventorySummary']
+export type InventoryMovement = Schemas['InventoryMovement']
+export type MovementPage = Schemas['PaginatedInventoryMovementList']
+export type MovementType = Schemas['StockMovementTypeEnum']
+export type StockAdjustment = Schemas['StockAdjustmentRequest']
+export type AdjustmentKind = Schemas['StockAdjustmentKindEnum']
+export type StockAdjustmentResult = Schemas['StockAdjustmentResult']
+
 export const ROLE_LABELS: Record<Role, string> = {
   admin: 'Admin',
   senior_cashier: 'Senior cashier',
