@@ -11,6 +11,7 @@ from apps.catalog.models import Category, Product, TaxRule, Variant
 from apps.customers.models import Customer
 from apps.inventory.models import StockMovement
 from apps.inventory.services import record_movement
+from apps.sales.models import InvoiceCounter, Sale
 from apps.store import seed_data
 from apps.store.models import StoreSettings
 from apps.suppliers.models import Supplier
@@ -57,6 +58,9 @@ class Command(BaseCommand):
             self.stdout.write(f"  {email:<26} {role}{pin_note}")
 
     def _reset(self):
+        # Sales protect the variants and staff they reference, so they go first (with their lines and payments).
+        Sale.objects.all().delete()
+        InvoiceCounter.objects.all().delete()
         StockMovement.objects.all().delete()
         Variant.objects.all().delete()
         Product.objects.all().delete()

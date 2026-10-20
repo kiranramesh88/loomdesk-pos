@@ -20,6 +20,22 @@ export type VariantWrite = Schemas['VariantWriteRequest']
 export type ProductStatus = Schemas['ProductStatusEnum']
 export type StockState = Schemas['StockStateEnum']
 
+export type BillingSettings = Schemas['BillingSettings']
+export type BillingCategory = Schemas['BillingCategory']
+export type SellableProduct = Schemas['SellableProduct']
+export type SellableVariant = Schemas['SellableVariant']
+export type SellableProductPage = Schemas['PaginatedSellableProductList']
+export type Approver = Schemas['Approver']
+export type BillRequest = Schemas['BillRequest']
+export type CheckoutRequest = Schemas['CheckoutRequest']
+export type Quote = Schemas['Quote']
+export type QuoteLine = Schemas['QuoteLine']
+export type TaxBreakdown = Schemas['TaxBreakdown']
+export type DiscountKind = Schemas['DiscountKindEnum']
+export type PaymentMethod = Schemas['PaymentMethodEnum']
+export type Sale = Schemas['Sale']
+export type SaleLine = Schemas['SaleLine']
+
 export const ROLE_LABELS: Record<Role, string> = {
   admin: 'Admin',
   senior_cashier: 'Senior cashier',

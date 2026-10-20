@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     "apps.inventory",
     "apps.customers",
     "apps.suppliers",
+    "apps.sales",
 ]
 
 MIDDLEWARE = [
@@ -149,5 +150,8 @@ SPECTACULAR_SETTINGS = {
         "TaxRuleKindEnum": "apps.catalog.models.TaxRule.Kind",
         "StockMovementTypeEnum": "apps.inventory.models.StockMovement.Type",
         "StockStateEnum": "apps.catalog.serializers.STOCK_STATES",
+        "PaymentMethodEnum": "apps.sales.models.Payment.Method",
+        "SaleStatusEnum": "apps.sales.models.Sale.Status",
+        "DiscountKindEnum": "apps.sales.serializers.DISCOUNT_KINDS",
     },
 }

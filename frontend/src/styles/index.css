@@ -189,3 +189,14 @@
     transform: translateX(-100%);
   }
 }
+
+/* Printing (receipts): white paper, no app chrome. Chrome opts out with `print:hidden`. */
+@media print {
+  @page {
+    margin: 10mm;
+  }
+  html,
+  body {
+    background: var(--color-white);
+  }
+}

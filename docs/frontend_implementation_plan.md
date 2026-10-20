@@ -63,7 +63,7 @@ These can't be carried over from the prototype.
 
 Each phase ends in something that can be demoed. The backend and frontend for a module ship together, following the spec's order in §10. The big change from that order is that billing comes early.
 
-> **Renumbered on 20 Oct 2026 (the user's call):** Products was built as **Phase 3**, ahead of Billing. Stock adjustment and movement history from row 4 stay with the Inventory module, and Billing follows when the user schedules it. The table below keeps the original plan for reference; §9 logs the order actually built.
+> **Renumbered on 20 Oct 2026 (the user's call):** Products was built as **Phase 3**, ahead of Billing, and Billing became **Phase 4**. Stock adjustment and movement history from row 4 stay with the Inventory module. The table below keeps the original plan for reference; §9 logs the order actually built.
 
 | Phase | Scope | Exit criteria |
 |---|---|---|
@@ -373,10 +373,10 @@ loomdesk/
 - `staleTime` is short (30 s) for catalog stock in billing and longer (5 min) for reference data like categories and settings.
 
 ### 6.4 Billing data flow
-1. Catalog search calls `GET /catalog/variants/?q=&category=` (it also matches barcodes) and returns variant-level stock and the current price.
+1. Catalog search calls `GET /billing/products/?q=&category=` (it also matches exact barcodes and variant SKUs) and returns active products with their sellable variants, stock and current price. *(Built in Phase 4; see §9.)*
 2. The bill is **local state** (`BillProvider` with a reducer), saved to `sessionStorage` so an accidental refresh doesn't lose the cart.
-3. `lib/billPreview.ts` calculates a **preview** with the same rules as the server (B1, B2). It's unit-tested against shared fixtures.
-4. Checkout calls `POST /sales/` with an `Idempotency-Key` header, a UUID created when the payment dialog opens. The server rechecks stock and prices, recalculates every total, writes Sale, Lines (snapshots), Payment and StockMovements in **one DB transaction**, and returns the authoritative invoice. If its totals differ from the preview, the UI shows the server's figures and flags the difference before confirming.
+3. ~~`lib/billPreview.ts`~~ **Changed in Phase 4:** the bill panel shows `POST /sales/quote/`, the server pricing the bill with the same code checkout uses. No tax maths is duplicated in the browser.
+4. Checkout calls `POST /sales/` with an `Idempotency-Key` header, a UUID created when the payment dialog opens. The server rechecks stock and prices, recalculates every total, writes Sale, Lines (snapshots), Payment and StockMovements in **one DB transaction**, and returns the authoritative invoice. Checkout sends the total the cashier confirmed (`expected_total_paise`); if the server's total differs, nothing is saved (409 `total_changed`) and the bill re-prices for the cashier to confirm again.
 5. While the request is pending, the submit button is disabled. A retry with the same key returns the original sale instead of creating a duplicate.
 
 ### 6.5 Images
@@ -415,19 +415,19 @@ Every checklist assumes the cross-cutting checks pass:
 - [ ] Cashiers can't reach `/admin/*`, either by URL or by API (403). They don't see admin links in the billing topbar.
 
 ### Billing
-- [ ] Search by name, SKU or barcode. A barcode scan plus Enter adds the item directly when it matches a single variant.
-- [ ] `/` focuses the search box. The no-results state has a "Clear search" action.
-- [ ] Category chips filter the results, and the count updates.
-- [ ] Out-of-stock variants show "Out of stock" as text and can't be added. Quantity can't exceed available stock.
-- [ ] The variant picker shows the stock for each size and colour combination.
-- [ ] The bill panel stays visible on desktop, and the total and CTA are always on screen.
-- [ ] An empty bill shows an empty state, and checkout is disabled.
-- [ ] The summary shows subtotal, discount, taxable value, tax and total, in the order from B1.
-- [ ] Discount respects the role limit (§8.2), and the server enforces it.
-- [ ] The payment dialog shows the amount due. For cash, an amount below the due blocks completion and change is calculated. UPI and card require a reference and are labelled "Recorded by cashier, not gateway-verified".
-- [ ] Double-clicking, retrying or refreshing during submit never creates two sales (tested with the idempotency key).
-- [ ] The success dialog shows the invoice number and offers Print receipt and New sale. The receipt prints without app chrome and includes line items, tax breakdown and payment.
-- [ ] Refreshing mid-bill keeps the cart.
+- [x] Search by name, SKU or barcode. A barcode scan plus Enter adds the item directly when it matches a single variant.
+- [x] `/` focuses the search box. The no-results state has a "Clear search" action.
+- [x] Category chips filter the results, and the count updates.
+- [x] Out-of-stock variants show "Out of stock" as text and can't be added. Quantity can't exceed available stock.
+- [x] The variant picker shows the stock for each size and colour combination.
+- [x] The bill panel stays visible on desktop, and the total and CTA are always on screen.
+- [x] An empty bill shows an empty state, and checkout is disabled.
+- [x] The summary shows subtotal, discount, taxable value, tax and total, in the order from B1.
+- [x] Discount respects the role limit (§8.2), and the server enforces it. *The approval PIN is checked inside `POST /sales/`; see the Phase 4 log for how this differs from §8.2.*
+- [x] The payment dialog shows the amount due. For cash, an amount below the due blocks completion and change is calculated. UPI and card require a reference and are labelled "Recorded by cashier, not gateway-verified".
+- [x] Double-clicking, retrying or refreshing during submit never creates two sales (tested with the idempotency key).
+- [x] The success dialog shows the invoice number and offers Print receipt and New sale. The receipt prints without app chrome and includes line items, tax breakdown and payment.
+- [x] Refreshing mid-bill keeps the cart.
 
 ### Overview
 - [ ] One date range drives every date-dependent panel and is shown as a visible label.
@@ -443,7 +443,7 @@ Every checklist assumes the cross-cutting checks pass:
 - [x] The table shows Product (with photo), SKU, Category, Price, Stock (as text), Status and Actions. Long names wrap without clipping.
 - [x] The form has sections for Info, Pricing & tax, Variants and Inventory. Errors are inline and values are kept after a server error.
 - [x] Duplicate SKUs and barcodes are rejected by the server and the error is shown on the field.
-- [ ] Archiving requires confirmation. Editing a product doesn't change past invoices (verified on an existing sale). *Confirmation done; the invoice half waits for Billing, since no sales exist yet.*
+- [x] Archiving requires confirmation. Editing a product doesn't change past invoices (verified on an existing sale). *Verified in Phase 4 by `test_receipt_matches_the_saved_sale_after_catalogue_and_store_changes`.*
 - [x] Cost and margin are visible only to Admin. *The whole catalogue API is admin-only for now.*
 
 ### Inventory
@@ -758,3 +758,72 @@ Each arrives with the phase that gives it real data.
 - **Past invoices:** the checklist item that edits leave past invoices unchanged can only be verified once Billing creates sales.
 - **Old photos:** reseeding leaves the previous photo files in `media/`. Only the image endpoint deletes a replaced photo.
 
+### Phase 4: Billing (done, 20 Oct 2026)
+
+**Backend (new app `apps/sales`):**
+- **Models** (migration `sales.0001`):
+  - `Sale`: invoice number, cashier, time, every total, the `prices_include_tax` setting at the time, the discount approver, and a snapshot of the store's name, code, address, state and GSTIN.
+  - `SaleLine`: snapshots name, product and variant SKU, size, colour, HSN, unit price, quantity, discount share, taxable value, GST rate and tax.
+  - `Payment`: one per sale. It stores method (cash, UPI or card), amount, cash tendered and change, and the UPI or card reference. `gateway_verified` is always `False`.
+  - `InvoiceCounter`: locked per sale, so numbers (`LD-000001`) have no gaps. A failed sale rolls its number back.
+  - Sales are read-only in Django admin and have no edit or delete endpoints (405).
+- **Pricing** (`sales/pricing.py`): the single implementation of §8.1.
+  - Money is integer paise, with divisions done in `Decimal` and rounded half-up.
+  - The bill discount is shared across lines by value, with leftover paise going to the largest line.
+  - The GST slab is chosen per unit after its discount share.
+  - Prices are **tax-exclusive** by default (`StoreSettings.prices_include_tax = False`), with GST added on top. Tax-inclusive prices are supported if the setting is turned on.
+  - The receipt splits each rate equally into CGST and SGST, with the odd paisa going to SGST.
+- **Staff endpoints** (`IsStaffMember`; the admin catalogue API is unchanged):
+  - `GET /billing/products/`: active products with only their active variants. It returns name, photo, SKU, category, HSN and GST rule, plus each variant's id, SKU, size, colour, barcode, price and stock. It never returns cost prices or movement history. `q` matches name, SKU, variant SKU or exact barcode; `category` filters.
+  - `GET /billing/categories/`, `GET /billing/approvers/` (active Senior cashiers and Admins with a PIN set), and `GET /billing/settings/` (store name and code, tax-inclusive flag, cashier discount limit).
+  - `POST /sales/quote/`: prices a bill without saving it. It returns per-line figures with current stock, the totals, the GST breakdown, the user's discount limit and whether approval is needed.
+  - `GET /sales/{invoice_no}/`: the saved sale for the receipt. Cashiers see their own sales; Senior cashiers and Admins see all.
+- **Checkout** (`POST /sales/`, `services.checkout`):
+  - The client sends variant ids, quantities, the discount, the payment, the total it confirmed, and the approver and PIN if needed. Prices and totals are always re-read on the server; client prices are ignored.
+  - Variants are locked (`select_for_update`, in id order) and their active state and stock are rechecked.
+  - Sale, lines, payment and stock movements (`record_movement`, type SALE, referenced by invoice number) are written in one transaction. Stock can't go negative: the row lock, `record_movement`'s check and the database constraint all guard it.
+  - **Idempotency:** the `Idempotency-Key` UUID header is required. It's unique per cashier, so a retry returns the original sale (200), even when two identical requests race. Reusing a key for a different bill gives 409 `idempotency_key_reused`, naming the invoice that was already saved.
+  - Payment rules: cash must cover the total. UPI and card need a reference.
+- **Discount approval** (deviation from §8.2, documented here):
+  - Limits are as planned: a cashier may give up to `cashier_discount_limit_pct` of the subtotal; Senior cashiers and Admins may give up to 100% and are recorded as the approver.
+  - Above the limit, the approver's id and PIN are sent with `POST /sales/` and checked inside the checkout transaction, instead of through a separate `POST /approvals/discount/` returning a single-use `approval_id`.
+  - Wrong PINs are counted per approver in Django's cache. After 5, that approver's PIN locks for 15 minutes.
+  - The approver is stored on the sale and printed on the receipt. There's no separate `AuditLog` yet.
+  - Because approval happens at completion, it can't go stale when the bill changes.
+- **Tests:** 65 sales tests cover role access, the staff catalogue's fields and filters, pricing (both slabs, the per-unit slab after discount, proportional discounts, flat and override rules, tax-inclusive prices), quantity and stock validation, inactive items, cash, UPI and card rules, idempotency (replay, key reuse, per-cashier keys), rollback on a mid-write failure, last-unit sales, discount limits and PINs, and receipts matching the saved sale.
+  - The truly concurrent last-unit test needs Postgres and is skipped on SQLite. A SQLite test instead simulates stock disappearing after the check.
+
+**Frontend (`features/billing`, `layouts/billing`):**
+- **Shell:** `BillingLayout` shows the brand, store name and code, the signed-in cashier's menu, and an "Admin portal" link only for admins. It has no sidebar.
+- **Workspace** (`/billing`):
+  - Search by name, SKU or barcode. `/` focuses it, and a scanned code plus Enter adds that exact variant.
+  - Category chips, and product cards with photos and stock in words. Sold-out items stay visible but disabled.
+  - A variant picker with nothing preselected. It shows price and remaining stock per option, and sold-out options are disabled.
+  - The bill shows quantity steppers (capped at the stock the server reports), remove, clear (with confirmation), and discount by percent or amount.
+  - Every figure on the bill comes from the server quote, in §7's order.
+  - At ≥821px the bill is a sticky side panel. Below that, a bottom bar keeps the total and "View bill" on screen and opens the bill as a sheet.
+  - The bill (and its checkout key) is kept per user in `sessionStorage`.
+  - Add and scan feedback appears under the search box, not as toasts, which would cover the bill's total.
+- **Payment dialog:**
+  - It shows the total to collect and a breakdown, with the amount repeated on the Complete button.
+  - Cash takes the amount received, with quick amounts and change due. UPI and card need a reference and say they're entered by the cashier, not gateway-verified.
+  - It shows approver and PIN fields when needed.
+  - Server field errors are mapped onto the form. A total that changed, items that changed, and network or server failures each get their own message.
+  - The Idempotency-Key is created the first time payment opens and kept until the bill changes or the sale completes, so a retry after a lost response (even after a refresh) can't record the sale twice.
+- **After the sale:** the sale-complete dialog shows the invoice number, total, method and change, with View & print receipt and New sale. `/billing/receipt/:invoiceNo` renders only saved data and prints without app chrome.
+- **Shared changes:**
+  - `Dialog` gains a `flush` option for the bill sheet.
+  - `MEDIA.split` is added.
+  - Toasts are hidden when printing.
+  - A print stylesheet is added.
+  - Four contrast pairings are added.
+- **Tests:** 36 new tests (13 unit, 23 page). They cover access, search, scan, filters, empty and error states, variant choice, server totals, stock errors, refresh, discount approval, cash, UPI, retry with the same key, total changes, wrong PIN, receipt contents and print, not-found receipts, and the phone bottom bar.
+
+**Open:**
+- **Customer attach:** not built; every sale is a walk-in. It wasn't in the Phase 4 brief, and the `Customer` model is ready for it.
+- **No real gateway:** payments are only recorded, never verified with a bank.
+- **Split payments:** not supported; there's one method per sale.
+- **Receipt access:** the receipt is reached from the sale-complete dialog or its URL. Reprinting from transaction details comes with the Transactions module.
+- **PIN lockout:** the counter lives in Django's cache (per process in development). Production should use a shared cache such as Redis.
+- **Concurrency:** the threaded last-unit test hasn't been run here (no Postgres available).
+- **Seed photos:** some demo photos are poor matches (for example "Floral Midi Dress"), and "Classic Chino" has none. That's seed data from Phase 3.

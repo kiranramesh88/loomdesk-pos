@@ -34,7 +34,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <ToastContext.Provider value={api}>
       {children}
       {/* Two persistent live regions: errors are announced assertively, everything else politely. */}
-      <div className="pointer-events-none fixed inset-x-3 bottom-[max(12px,env(safe-area-inset-bottom))] z-[60] flex flex-col items-center gap-2 sm:inset-x-auto sm:right-[22px] sm:bottom-[22px] sm:items-end">
+      <div className="pointer-events-none fixed inset-x-3 print:hidden bottom-[max(12px,env(safe-area-inset-bottom))] z-[60] flex flex-col items-center gap-2 sm:inset-x-auto sm:right-[22px] sm:bottom-[22px] sm:items-end">
         <div role="status" aria-live="polite" className="contents">
           {toasts.filter((t) => t.tone !== 'error').map((t) => (
             <ToastCard key={t.id} toast={t} onDismiss={dismiss} />

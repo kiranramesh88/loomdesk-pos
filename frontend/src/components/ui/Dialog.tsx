@@ -22,13 +22,15 @@ export interface DialogProps {
    * and outside clicks can't dismiss the dialog mid-action.
    */
   dismissible?: boolean
+  /** Drop the body's padding and scrolling, for content that lays out its own (e.g. a sheet with a fixed footer). */
+  flush?: boolean
 }
 
 /**
  * Focused task dialog (Radix: focus trap, Escape, focus returns to the trigger).
  * Centred on larger screens; a full-screen sheet on phones (spec §4 "Drawers and dialogs").
  */
-export function Dialog({ open, onOpenChange, title, description, children, footer, size = 'md', dismissible = true }: DialogProps) {
+export function Dialog({ open, onOpenChange, title, description, children, footer, size = 'md', dismissible = true, flush = false }: DialogProps) {
   const block = (event: Event) => {
     if (!dismissible) event.preventDefault()
   }
@@ -88,7 +90,7 @@ export function Dialog({ open, onOpenChange, title, description, children, foote
               <IconButton label="Close" icon={<X />} disabled={!dismissible} className="-mt-1 -mr-1.5" />
             </RadixDialog.Close>
           </div>
-          <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-[22px]">
+          <div ref={bodyRef} className={cx('min-h-0 flex-1', flush ? 'flex flex-col' : 'overflow-y-auto px-5 py-5 sm:px-[22px]')}>
             {children}
           </div>
           {footer && (

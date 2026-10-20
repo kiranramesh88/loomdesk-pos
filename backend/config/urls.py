@@ -4,12 +4,16 @@ from django.contrib import admin
 from django.urls import include, path, re_path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
+from apps.sales.urls import billing_urlpatterns, sales_urlpatterns
+
 from .spa import spa_index
 
 api_v1 = [
     path("auth/", include("apps.accounts.urls")),
     path("store/", include("apps.store.urls")),
     path("catalog/", include("apps.catalog.urls")),
+    path("billing/", include(billing_urlpatterns)),
+    path("sales/", include(sales_urlpatterns)),
     path("schema/", SpectacularAPIView.as_view(), name="api-schema"),
     path("docs/", SpectacularSwaggerView.as_view(url_name="api-schema"), name="api-docs"),
 ]

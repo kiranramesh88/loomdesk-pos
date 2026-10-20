@@ -91,6 +91,77 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/billing/approvers/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Who can approve a discount above a cashier's limit. */
+        get: operations["billing_approvers_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/categories/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["billing_categories_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/products/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description What the till can sell: active products with at least one active variant, and only those variants.
+         *
+         *     Separate from the admin catalogue (which shows cost prices and inactive items) so cashiers see
+         *     nothing beyond what they need to bill.
+         */
+        get: operations["billing_products_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/settings/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["billing_settings_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/catalog/categories/": {
         parameters: {
             query?: never;
@@ -178,6 +249,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Complete a sale. 201 when written; 200 when the same Idempotency-Key was already used for this bill. */
+        post: operations["sales_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/{invoice_no}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description A saved sale, for the receipt. Cashiers see their own sales; Senior cashiers and Admins see all. */
+        get: operations["sales_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/quote/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Price a bill without saving anything. The bill panel shows these figures, never its own. */
+        post: operations["sales_quote_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/store/": {
         parameters: {
             query?: never;
@@ -199,6 +321,30 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        Approver: {
+            readonly id: number;
+            readonly full_name: string;
+            readonly role: components["schemas"]["RoleEnum"];
+        };
+        BillLineInputRequest: {
+            variant: number;
+            quantity: number;
+        };
+        BillRequest: {
+            lines: components["schemas"]["BillLineInputRequest"][];
+            discount?: components["schemas"]["DiscountInputRequest"] | null;
+        };
+        BillingCategory: {
+            readonly id: number;
+            readonly name: string;
+        };
+        /** @description What the till needs to know about the store. No GSTIN, address or other admin settings. */
+        BillingSettings: {
+            store_name: string;
+            store_code: string;
+            prices_include_tax: boolean;
+            cashier_discount_limit_pct: number;
+        };
         Category: {
             readonly id: number;
             readonly name: string;
@@ -209,6 +355,25 @@ export interface components {
             readonly id: number;
             readonly name: string;
         };
+        CheckoutRequest: {
+            lines: components["schemas"]["BillLineInputRequest"][];
+            discount?: components["schemas"]["DiscountInputRequest"] | null;
+            payment: components["schemas"]["PaymentInputRequest"];
+            expected_total_paise: number;
+            approver_id?: number | null;
+            approval_pin?: string;
+        };
+        /** @description `amount` is paise; `percent` is basis points (1000 = 10%). */
+        DiscountInputRequest: {
+            kind: components["schemas"]["DiscountKindEnum"];
+            value: number;
+        };
+        /**
+         * @description * `amount` - amount
+         *     * `percent` - percent
+         * @enum {string}
+         */
+        DiscountKindEnum: "amount" | "percent";
         LoginRequest: {
             /** Format: email */
             email: string;
@@ -241,6 +406,21 @@ export interface components {
             previous?: string | null;
             results: components["schemas"]["ProductList"][];
         };
+        PaginatedSellableProductList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["SellableProduct"][];
+        };
         /**
          * @description Create or update a product and its variants in one atomic request.
          *
@@ -259,6 +439,28 @@ export interface components {
             status?: components["schemas"]["ProductStatusEnum"];
             variants?: components["schemas"]["VariantWriteRequest"][];
         };
+        Payment: {
+            readonly method: components["schemas"]["PaymentMethodEnum"];
+            readonly amount_paise: number;
+            readonly tendered_paise: number | null;
+            readonly change_paise: number;
+            readonly reference: string;
+            readonly gateway_verified: boolean;
+            /** Format: date-time */
+            readonly recorded_at: string;
+        };
+        PaymentInputRequest: {
+            method: components["schemas"]["PaymentMethodEnum"];
+            tendered_paise?: number | null;
+            reference?: string;
+        };
+        /**
+         * @description * `cash` - Cash
+         *     * `upi` - UPI
+         *     * `card` - Card
+         * @enum {string}
+         */
+        PaymentMethodEnum: "cash" | "upi" | "card";
         Permissions: {
             can_access_admin: boolean;
             can_approve_discounts: boolean;
@@ -330,6 +532,30 @@ export interface components {
             status?: components["schemas"]["ProductStatusEnum"];
             variants?: components["schemas"]["VariantWriteRequest"][];
         };
+        Quote: {
+            lines: components["schemas"]["QuoteLine"][];
+            prices_include_tax: boolean;
+            subtotal_paise: number;
+            discount_paise: number;
+            taxable_paise: number;
+            tax_paise: number;
+            total_paise: number;
+            tax_breakdown: components["schemas"]["TaxBreakdown"][];
+            discount_limit_paise: number | null;
+            needs_approval: boolean;
+        };
+        QuoteLine: {
+            variant: number;
+            quantity: number;
+            on_hand: number;
+            unit_price_paise: number;
+            subtotal_paise: number;
+            discount_paise: number;
+            taxable_paise: number;
+            tax_rate_bp: number;
+            tax_paise: number;
+            total_paise: number;
+        };
         /**
          * @description * `admin` - Admin
          *     * `senior_cashier` - Senior cashier
@@ -337,6 +563,77 @@ export interface components {
          * @enum {string}
          */
         RoleEnum: "admin" | "senior_cashier" | "cashier";
+        /** @description A saved sale as its receipt shows it. Every figure comes from the stored snapshot. */
+        Sale: {
+            readonly invoice_no: string;
+            readonly status: components["schemas"]["SaleStatusEnum"];
+            /** Format: date-time */
+            readonly created_at: string;
+            readonly cashier_name: string;
+            readonly store: {
+                name: string;
+                code: string;
+                address: string;
+                state: string;
+                gstin: string;
+            };
+            readonly prices_include_tax: boolean;
+            readonly subtotal_paise: number;
+            readonly discount_paise: number;
+            readonly taxable_paise: number;
+            readonly tax_paise: number;
+            readonly total_paise: number;
+            readonly discount_approved_by_name: string | null;
+            readonly lines: components["schemas"]["SaleLine"][];
+            readonly tax_breakdown: components["schemas"]["TaxBreakdown"][];
+            readonly payment: components["schemas"]["Payment"];
+        };
+        SaleLine: {
+            readonly id: number;
+            readonly variant: number;
+            readonly product_name: string;
+            readonly product_sku: string;
+            readonly variant_sku: string;
+            readonly size: string;
+            readonly colour: string;
+            readonly hsn_code: string;
+            readonly quantity: number;
+            readonly unit_price_paise: number;
+            readonly subtotal_paise: number;
+            readonly discount_paise: number;
+            readonly taxable_paise: number;
+            readonly tax_rate_bp: number;
+            readonly tax_paise: number;
+            readonly total_paise: number;
+        };
+        /**
+         * @description * `completed` - Completed
+         * @enum {string}
+         */
+        SaleStatusEnum: "completed";
+        SellableProduct: {
+            readonly id: number;
+            readonly name: string;
+            readonly sku: string;
+            readonly category: {
+                id: number;
+                name: string;
+            };
+            readonly image_url: string | null;
+            readonly hsn_code: string;
+            readonly tax_rule: components["schemas"]["TaxRule"];
+            readonly variants: components["schemas"]["SellableVariant"][];
+        };
+        SellableVariant: {
+            readonly id: number;
+            readonly sku: string;
+            readonly size: string;
+            readonly colour: string;
+            readonly barcode: string | null;
+            readonly price_paise: number;
+            readonly on_hand: number;
+            readonly stock_state: components["schemas"]["StockStateEnum"];
+        };
         Session: {
             user: components["schemas"]["Me"] | null;
         };
@@ -376,6 +673,13 @@ export interface components {
             readonly name: string;
             readonly code: string;
             readonly state: string;
+        };
+        TaxBreakdown: {
+            rate_bp: number;
+            taxable_paise: number;
+            tax_paise: number;
+            cgst_paise: number;
+            sgst_paise: number;
         };
         TaxRule: {
             readonly id: number;
@@ -526,6 +830,90 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Session"];
+                };
+            };
+        };
+    };
+    billing_approvers_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Approver"][];
+                };
+            };
+        };
+    };
+    billing_categories_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingCategory"][];
+                };
+            };
+        };
+    };
+    billing_products_list: {
+        parameters: {
+            query?: {
+                category?: number;
+                /** @description A page number within the paginated result set. */
+                page?: number;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description Name, SKU or exact barcode */
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedSellableProductList"];
+                };
+            };
+        };
+    };
+    billing_settings_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingSettings"];
                 };
             };
         };
@@ -740,6 +1128,88 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaxRule"][];
+                };
+            };
+        };
+    };
+    sales_create: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description UUID made when the payment step opens. Retrying with the same key returns the original sale. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckoutRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CheckoutRequest"];
+                "multipart/form-data": components["schemas"]["CheckoutRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Sale"];
+                };
+            };
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Sale"];
+                };
+            };
+        };
+    };
+    sales_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invoice_no: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Sale"];
+                };
+            };
+        };
+    };
+    sales_quote_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BillRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["BillRequest"];
+                "multipart/form-data": components["schemas"]["BillRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Quote"];
                 };
             };
         };

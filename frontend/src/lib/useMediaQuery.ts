@@ -20,4 +20,6 @@ export function useMediaQuery(query: string): boolean {
 export const MEDIA = {
   abovephone: '(width >= 35.0625rem)',
   rail: '(width >= 35.0625rem) and (width < 51.3125rem)',
+  /** From `md` (821px): billing shows the catalogue and the bill side by side. */
+  split: '(width >= 51.3125rem)',
 } as const

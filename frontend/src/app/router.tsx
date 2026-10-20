@@ -6,11 +6,12 @@ import { PageLoader } from '@/components/feedback/PageLoader'
 import { StatusScreen } from '@/components/feedback/StatusScreen'
 import { ADMIN_NAV, type AdminRouteHandle } from '@/layouts/admin/adminNav'
 import { AdminNotFound, AdminRouteError, AdminShellError } from '@/layouts/admin/AdminPageStates'
+import { billingRoutes } from '@/features/billing/routes'
 import { productRoutes } from '@/features/products/routes'
 import { ALL_ROLES } from '@/types/domain'
 
 import { HomeRedirect, RequireRole } from './guards'
-import { AdminLayout, AdminPlaceholderPage } from './lazyPages'
+import { AdminLayout, AdminPlaceholderPage, BillingLayout } from './lazyPages'
 import { ScaffoldPage } from './ScaffoldPage'
 
 const homeLink = (
@@ -59,7 +60,19 @@ export const routes: RouteObject[] = [
   },
   {
     element: <RequireRole roles={ALL_ROLES} />,
-    children: [{ path: '/billing/*', element: <ScaffoldPage area="Billing portal" phase={3} /> }],
+    children: [
+      {
+        path: '/billing',
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <BillingLayout />
+          </Suspense>
+        ),
+        errorElement: <AdminShellError />,
+        hydrateFallbackElement: <PageLoader />,
+        children: [{ errorElement: <AdminRouteError />, children: billingRoutes }],
+      },
+    ],
   },
   {
     element: <RequireRole roles={['admin']} />,

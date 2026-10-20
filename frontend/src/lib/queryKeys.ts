@@ -19,4 +19,18 @@ export const queryKeys = {
     categories: ['catalog', 'categories'] as const,
     taxRules: ['catalog', 'tax-rules'] as const,
   },
+  billing: {
+    settings: ['billing', 'settings'] as const,
+    categories: ['billing', 'categories'] as const,
+    approvers: ['billing', 'approvers'] as const,
+    /** Sellable products and their stock; every sale invalidates this prefix. */
+    products: ['billing', 'products'] as const,
+    productList: (params: Record<string, string>) => ['billing', 'products', params] as const,
+    quotes: ['billing', 'quote'] as const,
+    quote: (bill: unknown) => ['billing', 'quote', bill] as const,
+  },
+  sales: {
+    all: ['sales'] as const,
+    detail: (invoiceNo: string) => ['sales', 'detail', invoiceNo] as const,
+  },
 } as const

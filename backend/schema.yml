@@ -87,6 +87,94 @@ paths:
               schema:
                 $ref: '#/components/schemas/Session'
           description: ''
+  /api/v1/billing/approvers/:
+    get:
+      operationId: billing_approvers_list
+      description: Who can approve a discount above a cashier's limit.
+      tags:
+      - billing
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Approver'
+          description: ''
+  /api/v1/billing/categories/:
+    get:
+      operationId: billing_categories_list
+      tags:
+      - billing
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BillingCategory'
+          description: ''
+  /api/v1/billing/products/:
+    get:
+      operationId: billing_products_list
+      description: |-
+        What the till can sell: active products with at least one active variant, and only those variants.
+
+        Separate from the admin catalogue (which shows cost prices and inactive items) so cashiers see
+        nothing beyond what they need to bill.
+      parameters:
+      - in: query
+        name: category
+        schema:
+          type: number
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: q
+        schema:
+          type: string
+        description: Name, SKU or exact barcode
+      tags:
+      - billing
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedSellableProductList'
+          description: ''
+  /api/v1/billing/settings/:
+    get:
+      operationId: billing_settings_retrieve
+      tags:
+      - billing
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingSettings'
+          description: ''
   /api/v1/catalog/categories/:
     get:
       operationId: catalog_categories_list
@@ -347,6 +435,98 @@ paths:
                 items:
                   $ref: '#/components/schemas/TaxRule'
           description: ''
+  /api/v1/sales/:
+    post:
+      operationId: sales_create
+      description: Complete a sale. 201 when written; 200 when the same Idempotency-Key
+        was already used for this bill.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: UUID made when the payment step opens. Retrying with the same
+          key returns the original sale.
+        required: true
+      tags:
+      - sales
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckoutRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CheckoutRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CheckoutRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sale'
+          description: ''
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sale'
+          description: ''
+  /api/v1/sales/{invoice_no}/:
+    get:
+      operationId: sales_retrieve
+      description: A saved sale, for the receipt. Cashiers see their own sales; Senior
+        cashiers and Admins see all.
+      parameters:
+      - in: path
+        name: invoice_no
+        schema:
+          type: string
+        required: true
+      tags:
+      - sales
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sale'
+          description: ''
+  /api/v1/sales/quote/:
+    post:
+      operationId: sales_quote_create
+      description: Price a bill without saving anything. The bill panel shows these
+        figures, never its own.
+      tags:
+      - sales
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BillRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BillRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BillRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Quote'
+          description: ''
   /api/v1/store/:
     get:
       operationId: store_retrieve
@@ -365,6 +545,79 @@ paths:
           description: ''
 components:
   schemas:
+    Approver:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        full_name:
+          type: string
+          readOnly: true
+        role:
+          allOf:
+          - $ref: '#/components/schemas/RoleEnum'
+          readOnly: true
+      required:
+      - full_name
+      - id
+      - role
+    BillLineInputRequest:
+      type: object
+      properties:
+        variant:
+          type: integer
+          minimum: 1
+        quantity:
+          type: integer
+          maximum: 999
+          minimum: 1
+      required:
+      - quantity
+      - variant
+    BillRequest:
+      type: object
+      properties:
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/BillLineInputRequest'
+        discount:
+          allOf:
+          - $ref: '#/components/schemas/DiscountInputRequest'
+          nullable: true
+      required:
+      - lines
+    BillingCategory:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+      required:
+      - id
+      - name
+    BillingSettings:
+      type: object
+      description: What the till needs to know about the store. No GSTIN, address
+        or other admin settings.
+      properties:
+        store_name:
+          type: string
+        store_code:
+          type: string
+        prices_include_tax:
+          type: boolean
+        cashier_discount_limit_pct:
+          type: integer
+      required:
+      - cashier_discount_limit_pct
+      - prices_include_tax
+      - store_code
+      - store_name
     Category:
       type: object
       properties:
@@ -398,6 +651,56 @@ components:
       required:
       - id
       - name
+    CheckoutRequest:
+      type: object
+      properties:
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/BillLineInputRequest'
+        discount:
+          allOf:
+          - $ref: '#/components/schemas/DiscountInputRequest'
+          nullable: true
+        payment:
+          $ref: '#/components/schemas/PaymentInputRequest'
+        expected_total_paise:
+          type: integer
+          minimum: 0
+        approver_id:
+          type: integer
+          nullable: true
+        approval_pin:
+          writeOnly: true
+          oneOf:
+          - type: string
+            pattern: ^\d{4,6}$
+          - type: string
+            maxLength: 0
+      required:
+      - expected_total_paise
+      - lines
+      - payment
+    DiscountInputRequest:
+      type: object
+      description: '`amount` is paise; `percent` is basis points (1000 = 10%).'
+      properties:
+        kind:
+          $ref: '#/components/schemas/DiscountKindEnum'
+        value:
+          type: integer
+          minimum: 0
+      required:
+      - kind
+      - value
+    DiscountKindEnum:
+      enum:
+      - amount
+      - percent
+      type: string
+      description: |-
+        * `amount` - amount
+        * `percent` - percent
     LoginRequest:
       type: object
       properties:
@@ -467,6 +770,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ProductList'
+    PaginatedSellableProductList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/SellableProduct'
     PatchedProductWriteRequest:
       type: object
       description: |-
@@ -508,6 +834,66 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/VariantWriteRequest'
+    Payment:
+      type: object
+      properties:
+        method:
+          allOf:
+          - $ref: '#/components/schemas/PaymentMethodEnum'
+          readOnly: true
+        amount_paise:
+          type: integer
+          readOnly: true
+        tendered_paise:
+          type: integer
+          readOnly: true
+          nullable: true
+        change_paise:
+          type: integer
+          readOnly: true
+        reference:
+          type: string
+          readOnly: true
+        gateway_verified:
+          type: boolean
+          readOnly: true
+        recorded_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - amount_paise
+      - change_paise
+      - gateway_verified
+      - method
+      - recorded_at
+      - reference
+      - tendered_paise
+    PaymentInputRequest:
+      type: object
+      properties:
+        method:
+          $ref: '#/components/schemas/PaymentMethodEnum'
+        tendered_paise:
+          type: integer
+          maximum: 1000000000
+          minimum: 0
+          nullable: true
+        reference:
+          type: string
+          maxLength: 40
+      required:
+      - method
+    PaymentMethodEnum:
+      enum:
+      - cash
+      - upi
+      - card
+      type: string
+      description: |-
+        * `cash` - Cash
+        * `upi` - UPI
+        * `card` - Card
     Permissions:
       type: object
       properties:
@@ -730,6 +1116,79 @@ components:
       - category
       - name
       - sku
+    Quote:
+      type: object
+      properties:
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuoteLine'
+        prices_include_tax:
+          type: boolean
+        subtotal_paise:
+          type: integer
+        discount_paise:
+          type: integer
+        taxable_paise:
+          type: integer
+        tax_paise:
+          type: integer
+        total_paise:
+          type: integer
+        tax_breakdown:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaxBreakdown'
+        discount_limit_paise:
+          type: integer
+          nullable: true
+        needs_approval:
+          type: boolean
+      required:
+      - discount_limit_paise
+      - discount_paise
+      - lines
+      - needs_approval
+      - prices_include_tax
+      - subtotal_paise
+      - tax_breakdown
+      - tax_paise
+      - taxable_paise
+      - total_paise
+    QuoteLine:
+      type: object
+      properties:
+        variant:
+          type: integer
+        quantity:
+          type: integer
+        on_hand:
+          type: integer
+        unit_price_paise:
+          type: integer
+        subtotal_paise:
+          type: integer
+        discount_paise:
+          type: integer
+        taxable_paise:
+          type: integer
+        tax_rate_bp:
+          type: integer
+        tax_paise:
+          type: integer
+        total_paise:
+          type: integer
+      required:
+      - discount_paise
+      - on_hand
+      - quantity
+      - subtotal_paise
+      - tax_paise
+      - tax_rate_bp
+      - taxable_paise
+      - total_paise
+      - unit_price_paise
+      - variant
     RoleEnum:
       enum:
       - admin
@@ -740,6 +1199,256 @@ components:
         * `admin` - Admin
         * `senior_cashier` - Senior cashier
         * `cashier` - Cashier
+    Sale:
+      type: object
+      description: A saved sale as its receipt shows it. Every figure comes from the
+        stored snapshot.
+      properties:
+        invoice_no:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/SaleStatusEnum'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        cashier_name:
+          type: string
+          readOnly: true
+        store:
+          type: object
+          properties:
+            name:
+              type: string
+            code:
+              type: string
+            address:
+              type: string
+            state:
+              type: string
+            gstin:
+              type: string
+          required:
+          - name
+          - code
+          - address
+          - state
+          - gstin
+          readOnly: true
+        prices_include_tax:
+          type: boolean
+          readOnly: true
+        subtotal_paise:
+          type: integer
+          readOnly: true
+        discount_paise:
+          type: integer
+          readOnly: true
+        taxable_paise:
+          type: integer
+          readOnly: true
+        tax_paise:
+          type: integer
+          readOnly: true
+        total_paise:
+          type: integer
+          readOnly: true
+        discount_approved_by_name:
+          type: string
+          readOnly: true
+          nullable: true
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/SaleLine'
+          readOnly: true
+        tax_breakdown:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaxBreakdown'
+          readOnly: true
+        payment:
+          allOf:
+          - $ref: '#/components/schemas/Payment'
+          readOnly: true
+      required:
+      - cashier_name
+      - created_at
+      - discount_approved_by_name
+      - discount_paise
+      - invoice_no
+      - lines
+      - payment
+      - prices_include_tax
+      - status
+      - store
+      - subtotal_paise
+      - tax_breakdown
+      - tax_paise
+      - taxable_paise
+      - total_paise
+    SaleLine:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        variant:
+          type: integer
+          readOnly: true
+        product_name:
+          type: string
+          readOnly: true
+        product_sku:
+          type: string
+          readOnly: true
+        variant_sku:
+          type: string
+          readOnly: true
+        size:
+          type: string
+          readOnly: true
+        colour:
+          type: string
+          readOnly: true
+        hsn_code:
+          type: string
+          readOnly: true
+        quantity:
+          type: integer
+          readOnly: true
+        unit_price_paise:
+          type: integer
+          readOnly: true
+        subtotal_paise:
+          type: integer
+          readOnly: true
+        discount_paise:
+          type: integer
+          readOnly: true
+        taxable_paise:
+          type: integer
+          readOnly: true
+        tax_rate_bp:
+          type: integer
+          readOnly: true
+        tax_paise:
+          type: integer
+          readOnly: true
+        total_paise:
+          type: integer
+          readOnly: true
+      required:
+      - colour
+      - discount_paise
+      - hsn_code
+      - id
+      - product_name
+      - product_sku
+      - quantity
+      - size
+      - subtotal_paise
+      - tax_paise
+      - tax_rate_bp
+      - taxable_paise
+      - total_paise
+      - unit_price_paise
+      - variant
+      - variant_sku
+    SaleStatusEnum:
+      enum:
+      - completed
+      type: string
+      description: '* `completed` - Completed'
+    SellableProduct:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        sku:
+          type: string
+          readOnly: true
+        category:
+          type: object
+          properties:
+            id:
+              type: integer
+            name:
+              type: string
+          required:
+          - id
+          - name
+          readOnly: true
+        image_url:
+          type: string
+          nullable: true
+          readOnly: true
+        hsn_code:
+          type: string
+          readOnly: true
+        tax_rule:
+          allOf:
+          - $ref: '#/components/schemas/TaxRule'
+          readOnly: true
+        variants:
+          type: array
+          items:
+            $ref: '#/components/schemas/SellableVariant'
+          readOnly: true
+      required:
+      - category
+      - hsn_code
+      - id
+      - image_url
+      - name
+      - sku
+      - tax_rule
+      - variants
+    SellableVariant:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        sku:
+          type: string
+          readOnly: true
+        size:
+          type: string
+          readOnly: true
+        colour:
+          type: string
+          readOnly: true
+        barcode:
+          type: string
+          readOnly: true
+          nullable: true
+        price_paise:
+          type: integer
+          readOnly: true
+        on_hand:
+          type: integer
+          readOnly: true
+        stock_state:
+          allOf:
+          - $ref: '#/components/schemas/StockStateEnum'
+          readOnly: true
+      required:
+      - barcode
+      - colour
+      - id
+      - on_hand
+      - price_paise
+      - size
+      - sku
+      - stock_state
     Session:
       type: object
       properties:
@@ -842,6 +1551,25 @@ components:
       - code
       - name
       - state
+    TaxBreakdown:
+      type: object
+      properties:
+        rate_bp:
+          type: integer
+        taxable_paise:
+          type: integer
+        tax_paise:
+          type: integer
+        cgst_paise:
+          type: integer
+        sgst_paise:
+          type: integer
+      required:
+      - cgst_paise
+      - rate_bp
+      - sgst_paise
+      - tax_paise
+      - taxable_paise
     TaxRule:
       type: object
       properties:
