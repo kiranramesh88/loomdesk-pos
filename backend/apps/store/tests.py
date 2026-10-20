@@ -8,7 +8,7 @@ from rest_framework.test import APIClient
 from apps.accounts.models import Role, User
 from apps.catalog.models import Product, Variant
 from apps.inventory.models import StockMovement
-from apps.store.management.commands.seed_demo import ean13, split_stock
+from apps.store.demo_catalogue import ean13, split_stock
 from apps.store.models import StoreSettings
 from apps.store.seed_data import PRODUCTS
 

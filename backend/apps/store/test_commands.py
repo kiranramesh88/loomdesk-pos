@@ -8,10 +8,14 @@ from django.core.management import CommandError, call_command
 from PIL import Image
 
 from apps.accounts.models import Role, User
-from apps.catalog.models import Category, Product, TaxRule
+from apps.catalog.models import Category, Product, TaxRule, Variant
+from apps.customers.models import Customer
+from apps.inventory.models import StockMovement
+from apps.store import seed_data
 from apps.store.management.commands import seed_demo
 from apps.store.models import StoreSettings
 from apps.store.reference import ensure_reference_data
+from apps.suppliers.models import Supplier
 
 pytestmark = pytest.mark.django_db
 
@@ -133,3 +137,53 @@ def test_refresh_photos_replaces_only_the_photos(monkeypatch, tmp_path, settings
     assert shirt.base_price_paise == 1199_00
     assert "P-1001 Classic Cotton Shirt: photo replaced" in out.getvalue()
     assert "P-1002 Everyday Linen Kurta: not in this database" in out.getvalue()
+
+
+def test_load_demo_catalogue_fills_an_empty_store_without_accounts(settings, tmp_path):
+    settings.SETTINGS_MODULE = "config.settings.prod"  # allowed under production settings, unlike seed_demo
+    settings.MEDIA_ROOT = tmp_path / "media"
+    photos = tmp_path / "photos"
+    photos.mkdir()
+    (photos / "P-1001.jpg").write_bytes(_jpeg("blue"))
+
+    out = io.StringIO()
+    call_command("load_demo_catalogue", "--photos", str(photos), stdout=out)
+
+    assert Product.objects.count() == len(seed_data.PRODUCTS)
+    assert Supplier.objects.count() == len(seed_data.SUPPLIERS)
+    assert not User.objects.exists()
+    assert not Customer.objects.exists()
+    opening = StockMovement.objects.filter(type=StockMovement.Type.OPENING)
+    assert sum(m.quantity_delta for m in opening) == sum(p[6] for p in seed_data.PRODUCTS)
+    assert not opening.exclude(actor=None).exists()
+    assert sum(v.on_hand for v in Variant.objects.all()) == sum(p[6] for p in seed_data.PRODUCTS)
+    assert Product.objects.get(sku="SH-CT-001").image
+    assert Product.objects.exclude(sku="SH-CT-001").filter(image="").count() == len(seed_data.PRODUCTS) - 1
+    assert "No accounts were created." in out.getvalue()
+    assert f"1 of {len(seed_data.PRODUCTS)} products have a photo" in out.getvalue()
+
+
+@pytest.mark.parametrize("existing", ["product", "supplier"])
+def test_load_demo_catalogue_refuses_a_store_with_records(existing):
+    if existing == "product":
+        _, categories = ensure_reference_data()
+        Product.objects.create(name="Own shirt", sku="OWN-1", category=categories["Shirts"], base_price_paise=100_00, cost_price_paise=50_00)
+    else:
+        Supplier.objects.create(name="Own supplier")
+    with pytest.raises(CommandError, match="only fills a new, empty store; nothing was changed"):
+        call_command("load_demo_catalogue", stdout=io.StringIO())
+    assert Product.objects.count() == (1 if existing == "product" else 0)
+    assert Supplier.objects.count() == (1 if existing == "supplier" else 0)
+    assert not StockMovement.objects.exists()
+
+
+def test_seed_demo_still_loads_the_development_store(monkeypatch, tmp_path, settings):
+    settings.MEDIA_ROOT = tmp_path / "media"
+    monkeypatch.setattr(seed_demo, "PHOTO_DIR", tmp_path / "no-photos")
+    call_command("seed_demo", stdout=io.StringIO())
+    assert User.objects.count() == len(seed_data.STAFF)
+    assert Product.objects.count() == len(seed_data.PRODUCTS)
+    assert Supplier.objects.count() == len(seed_data.SUPPLIERS)
+    assert Customer.objects.count() == len(seed_data.CUSTOMERS)
+    # Opening stock is recorded by the first demo admin, as before.
+    assert set(StockMovement.objects.values_list("actor__role", flat=True)) == {Role.ADMIN}
