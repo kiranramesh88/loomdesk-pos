@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { Fragment, type ReactNode } from 'react'
 
 import { cx } from '@/lib/cx'
 import { formatMoney } from '@/lib/money'
@@ -89,10 +89,10 @@ export function Receipt({ sale }: { sale: Sale }) {
           )}
           <Amount label="Taxable value" paise={sale.taxable_paise} />
           {sale.tax_breakdown.map((row) => (
-            <div key={row.rate_bp} className="grid gap-0.5">
+            <Fragment key={row.rate_bp}>
               <Amount label={`CGST ${formatRate(row.rate_bp / 2)} on ${formatMoney(row.taxable_paise)}`} paise={row.cgst_paise} />
               <Amount label={`SGST ${formatRate(row.rate_bp / 2)} on ${formatMoney(row.taxable_paise)}`} paise={row.sgst_paise} />
-            </div>
+            </Fragment>
           ))}
         </dl>
         <div className="mt-2.5 flex items-baseline justify-between border-t border-ink-3 pt-2.5">
@@ -112,12 +112,10 @@ export function Receipt({ sale }: { sale: Sale }) {
               <Amount label="Change" paise={payment.change_paise} />
             </>
           ) : (
-            <>
-              <Meta label="Reference" value={payment.reference} row />
-              <p className="type-caption">Recorded by the cashier, not gateway-verified.</p>
-            </>
+            <Meta label="Reference" value={payment.reference} row />
           )}
         </dl>
+        {payment.method !== 'cash' && <p className="mt-1 type-caption">Recorded by the cashier, not gateway-verified.</p>}
 
         <p className="mt-5 text-center type-caption">Thank you for shopping with us.</p>
       </div>

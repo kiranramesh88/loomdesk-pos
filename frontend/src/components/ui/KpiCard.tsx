@@ -55,7 +55,7 @@ export function KpiCard({ label, value, icon: Icon, footnote, trend, isLoading, 
         </span>
       ) : (
         <>
-          <div className="mt-1.5 type-figure">{value}</div>
+          <div className="mt-1.5 type-figure wrap-anywhere">{value}</div>
           {(trend || footnote) && (
             <div className="mt-auto flex flex-wrap items-center gap-x-1.5 gap-y-0.5 pt-2 type-caption">
               {trend && (

@@ -1,6 +1,6 @@
 import * as RadixDialog from '@radix-ui/react-dialog'
 import { X } from 'lucide-react'
-import { useLayoutEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, type ReactNode, type RefObject } from 'react'
 
 import { cx } from '@/lib/cx'
 
@@ -93,6 +93,7 @@ export function Dialog({ open, onOpenChange, title, description, children, foote
           <div ref={bodyRef} className={cx('min-h-0 flex-1', flush ? 'flex flex-col' : 'overflow-y-auto px-5 py-5 sm:px-[22px]')}>
             {children}
           </div>
+          <ReturnFocusOnUnmount target={returnFocusTo} />
           {footer && (
             <div
               ref={footerRef}
@@ -104,6 +105,22 @@ export function Dialog({ open, onOpenChange, title, description, children, foote
       </RadixDialog.Portal>
     </RadixDialog.Root>
   )
+}
+
+/**
+ * Radix restores focus from a timer after the content unmounts. When timers lag (seen under load in
+ * headless Chrome), focus sits on <body> meanwhile, so also restore it as the content unmounts, by which
+ * point Radix's focus trap is gone. Only when focus has fallen to <body>, so it never takes focus back.
+ */
+function ReturnFocusOnUnmount({ target }: { target: RefObject<HTMLElement | null> }) {
+  useEffect(
+    () => () => {
+      const el = target.current
+      if (el?.isConnected && (document.activeElement === null || document.activeElement === document.body)) el.focus()
+    },
+    [target],
+  )
+  return null
 }
 
 const FOCUSABLE = 'input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'

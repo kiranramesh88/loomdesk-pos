@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { Fragment, type ReactNode } from 'react'
 
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import { DataTable, type Column } from '@/components/ui/DataTable'
@@ -96,10 +96,10 @@ export function Totals({ sale }: { sale: Sale }) {
         )}
         <Amount label="Taxable value" paise={sale.taxable_paise} />
         {sale.tax_breakdown.map((row) => (
-          <div key={row.rate_bp} className="grid gap-1.5">
+          <Fragment key={row.rate_bp}>
             <Amount label={`CGST ${formatRate(row.rate_bp / 2)} on ${formatMoney(row.taxable_paise)}`} paise={row.cgst_paise} />
             <Amount label={`SGST ${formatRate(row.rate_bp / 2)} on ${formatMoney(row.taxable_paise)}`} paise={row.sgst_paise} />
-          </div>
+          </Fragment>
         ))}
         <div className="mt-1.5 flex items-baseline justify-between gap-3 border-t border-line pt-2.5">
           <dt className="type-section">Total</dt>

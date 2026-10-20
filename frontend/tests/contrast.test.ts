@@ -43,6 +43,7 @@ const TEXT_PAIRS: Array<[fg: string, bg: string, where: string]> = [
   ['primary', 'surface', 'links'],
   ['primary', 'bg', 'links on the workspace'],
   ['primary', 'primary-soft', 'info badge, count pill'],
+  ['ink-3', 'primary-soft', 'settings: hint on the selected pricing choice'],
   ['white', 'primary', 'primary button'],
   ['white', 'primary-hover', 'primary button hover'],
   ['white', 'danger', 'danger button'],

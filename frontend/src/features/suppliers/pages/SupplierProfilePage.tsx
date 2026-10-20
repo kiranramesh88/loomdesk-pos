@@ -28,9 +28,9 @@ import { BackLink, WithSupplier } from './SupplierFormPages'
 
 const purchaseLink = (number: string) => `/admin/suppliers/purchases/${number}`
 
-function Fact({ label, children }: { label: string; children: React.ReactNode }) {
+function Fact({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
   return (
-    <div className="min-w-0">
+    <div className={className ? `min-w-0 ${className}` : 'min-w-0'}>
       <dt className="type-helper">{label}</dt>
       <dd className="mt-0.5 type-body font-strong break-words whitespace-pre-line text-ink-2">{children || '—'}</dd>
     </div>
@@ -323,13 +323,13 @@ function Profile({ s }: { s: SupplierDetail }) {
               <Fact label="Email">{s.email}</Fact>
               <Fact label="GSTIN">{s.gstin}</Fact>
               <Fact label="State">{s.state}</Fact>
-              <div className="sm:col-span-2 lg:col-span-3">
-                <Fact label="Address">{s.address}</Fact>
-              </div>
+              <Fact label="Address" className="sm:col-span-2 lg:col-span-3">
+                {s.address}
+              </Fact>
               {s.notes && (
-                <div className="sm:col-span-2 lg:col-span-4">
-                  <Fact label="Notes">{s.notes}</Fact>
-                </div>
+                <Fact label="Notes" className="sm:col-span-2 lg:col-span-4">
+                  {s.notes}
+                </Fact>
               )}
             </dl>
           </CardBody>

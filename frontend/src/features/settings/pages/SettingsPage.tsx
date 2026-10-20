@@ -219,7 +219,7 @@ function Pricing({ settings }: { settings: StoreSettings }) {
       />
       <span className="grid gap-0.5">
         <span className="type-label">{title}</span>
-        <span className="type-helper">{example(value)}</span>
+        <span className={cx('type-helper', include === value && 'text-ink-3')}>{example(value)}</span>
       </span>
     </label>
   )

@@ -172,9 +172,9 @@ const LINE_COLUMNS: Column<PurchaseLine>[] = [
   { id: 'total', header: 'Total', align: 'right', width: '130px', cell: (l) => <span className="type-amount">{formatMoney(l.total_paise)}</span> },
 ]
 
-function Fact({ label, children }: { label: string; children: React.ReactNode }) {
+function Fact({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
   return (
-    <div className="min-w-0">
+    <div className={className ? `min-w-0 ${className}` : 'min-w-0'}>
       <dt className="type-helper">{label}</dt>
       <dd className="mt-0.5 type-body font-strong break-words text-ink-2">{children}</dd>
     </div>
@@ -313,11 +313,9 @@ function Detail({ p }: { p: Purchase }) {
                 </Fact>
               )}
               {p.notes && (
-                <div className="sm:col-span-2">
-                  <Fact label="Notes">
-                    <span className="whitespace-pre-line">{p.notes}</span>
-                  </Fact>
-                </div>
+                <Fact label="Notes" className="sm:col-span-2">
+                  <span className="whitespace-pre-line">{p.notes}</span>
+                </Fact>
               )}
             </dl>
           </CardBody>

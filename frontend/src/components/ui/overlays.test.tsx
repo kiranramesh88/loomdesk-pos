@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 
@@ -36,6 +36,24 @@ describe('Dialog', () => {
     await userEvent.keyboard('{Escape}')
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     await waitFor(() => expect(trigger).toHaveFocus())
+  })
+
+  it('returns focus to the trigger even when timers lag', async () => {
+    render(<Harness />)
+    const trigger = screen.getByRole('button', { name: 'Adjust stock' })
+    await userEvent.click(trigger)
+    await waitFor(() => expect(screen.getByLabelText('Quantity')).toHaveFocus())
+    // Radix restores focus from a setTimeout; hold every timer and close.
+    vi.useFakeTimers({ toFake: ['setTimeout'] })
+    try {
+      act(() => {
+        fireEvent.keyDown(screen.getByLabelText('Quantity'), { key: 'Escape' })
+      })
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      expect(trigger).toHaveFocus()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('keeps focus trapped inside while open', async () => {
