@@ -17,7 +17,12 @@ def _load_env_file(path: Path) -> None:
         os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
 
 
-_load_env_file(BASE_DIR / ".env")
+PRODUCTION_SETTINGS = "config.settings.prod"
+
+# backend/.env is a development convenience. Production reads only the real environment, so a
+# missing variable fails loudly instead of quietly picking up development values from the file.
+if os.environ.get("DJANGO_SETTINGS_MODULE") != PRODUCTION_SETTINGS:
+    _load_env_file(BASE_DIR / ".env")
 
 
 def env(key: str, default: str | None = None) -> str | None:
@@ -109,9 +114,10 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = "/static/"
-STATIC_ROOT = BASE_DIR / "staticfiles"
+STATIC_ROOT = Path(env("DJANGO_STATIC_ROOT") or BASE_DIR / "staticfiles")
 MEDIA_URL = "/media/"
-MEDIA_ROOT = BASE_DIR / "media"
+# Uploaded product photos. In production point this at storage that outlives a deploy (a mounted volume).
+MEDIA_ROOT = Path(env("DJANGO_MEDIA_ROOT") or BASE_DIR / "media")
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
@@ -127,6 +133,19 @@ SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SAMESITE = "Lax"
 # The SPA reads the CSRF cookie and echoes it in X-CSRFToken.
 CSRF_COOKIE_HTTPONLY = False
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {"plain": {"format": "%(asctime)s %(levelname)s %(name)s %(message)s"}},
+    "handlers": {"console": {"class": "logging.StreamHandler", "formatter": "plain"}},
+    "root": {"handlers": ["console"], "level": env("DJANGO_LOG_LEVEL", "INFO")},
+    "loggers": {
+        # Unhandled exceptions (500s) and security events (bad host, CSRF failures) always reach the log.
+        "django.request": {"level": "WARNING"},
+        "django.security": {"level": "WARNING"},
+    },
+}
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": ["rest_framework.authentication.SessionAuthentication"],

@@ -4,6 +4,7 @@ The frontend's lib/http.ts relies on this shape to map errors onto form fields. 
 serializer errors use dotted paths ("variants.2.sku"), which react-hook-form understands.
 """
 
+from django.http import HttpResponseNotFound, HttpResponseServerError, JsonResponse
 from rest_framework import exceptions, status
 from rest_framework.response import Response
 from rest_framework.views import exception_handler
@@ -55,3 +56,22 @@ def api_exception_handler(exc, context):
     code = detail.code if hasattr(detail, "code") else getattr(exc, "default_code", "error")
     response.data = {"detail": str(detail or response.data), "code": str(code), "fields": {}}
     return response
+
+
+def _is_api(request) -> bool:
+    return request.path.startswith("/api/")
+
+
+def not_found(request, exception=None):
+    """handler404: an unknown API path gets the envelope; a missing asset gets a plain 404, never the SPA."""
+    if _is_api(request):
+        return JsonResponse({"detail": "Not found.", "code": "not_found", "fields": {}}, status=404)
+    return HttpResponseNotFound("Not found.", content_type="text/plain")
+
+
+def server_error(request):
+    """handler500: no stack trace or settings leak to the client; the error is logged by django.request."""
+    if _is_api(request):
+        body = {"detail": "Something went wrong on the server. Please try again.", "code": "server_error", "fields": {}}
+        return JsonResponse(body, status=500)
+    return HttpResponseServerError("Something went wrong on the server. Please try again.", content_type="text/plain")

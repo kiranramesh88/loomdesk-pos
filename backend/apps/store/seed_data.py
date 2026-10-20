@@ -38,18 +38,27 @@ PRODUCTS = [
     ("P-1009", "Embroidered Kurti", "Kurtas", "KU-EM-021", 1790, 930, 16, 7, ["S", "M", "L", "XL"], ["Coral", "Blue"]),
 ]
 
-# Free-to-use Unsplash photos used by the prototype. P-1008 is omitted on purpose: the
-# prototype reused P-1003's photo for it, so it shows the neutral placeholder until a
-# distinct photo is supplied (drop it in backend/seed/photos/P-1008.jpg).
+# Product photos, free to use under the Unsplash License (https://unsplash.com/license). Each one shows
+# the product it's assigned to; the prototype's originals showed a T-shirt for the shirt, polos for the
+# kurta, a ghost costume for the dress and a blazer for the kurti, and reused the denim photo for the chino.
+# The photo pages are listed so the source and photographer can be checked.
+_UNSPLASH = "https://images.unsplash.com/photo-{}?auto=format&fit=max&w=760&q=85"
 PHOTO_URLS = {
-    "P-1001": "https://images.unsplash.com/photo-1651761179569-4ba2aa054997?auto=format&fit=max&w=760&q=85",
-    "P-1002": "https://images.unsplash.com/photo-1715268724067-815084f10571?auto=format&fit=max&w=760&q=85",
-    "P-1003": "https://images.unsplash.com/photo-1714143136372-ddaf8b606da7?auto=format&fit=max&w=760&q=85",
-    "P-1004": "https://images.unsplash.com/photo-1665002556081-5c476292d1aa?auto=format&fit=max&w=760&q=85",
-    "P-1005": "https://images.unsplash.com/photo-1766727923581-d4df2f4e9308?auto=format&fit=max&w=760&q=85",
-    "P-1006": "https://images.unsplash.com/photo-1780480999314-b82a1f2f9de6?auto=format&fit=max&w=760&q=85",
-    "P-1007": "https://images.unsplash.com/photo-1717127491253-5ecd4536447e?auto=format&fit=max&w=760&q=85",
-    "P-1009": "https://images.unsplash.com/photo-1602185335134-2d072c07703c?auto=format&fit=max&w=760&q=85",
+    # unsplash.com/photos/hMMXhKSZk7k — white button-up shirt on a hanger (Nimble Made)
+    "P-1001": _UNSPLASH.format("1603252109303-2751441dd157"),
+    # unsplash.com/photos/sLRFg-VC2FY — blue kurta
+    "P-1002": _UNSPLASH.format("1770359993283-a2c2f386584e"),
+    "P-1003": _UNSPLASH.format("1714143136372-ddaf8b606da7"),
+    # unsplash.com/photos/cRpcTf0VfuE — floral midi sundress
+    "P-1004": _UNSPLASH.format("1762154057377-cc9d3dd6900c"),
+    "P-1005": _UNSPLASH.format("1766727923581-d4df2f4e9308"),
+    "P-1006": _UNSPLASH.format("1780480999314-b82a1f2f9de6"),
+    # The plain white tee the prototype used for the shirt.
+    "P-1007": _UNSPLASH.format("1651761179569-4ba2aa054997"),
+    # unsplash.com/photos/O2g79zAqJX8 — beige chinos
+    "P-1008": _UNSPLASH.format("1788380944948-f5fe4a3b3a13"),
+    # unsplash.com/photos/e_Ha_TxDlG0 — kurti with an embroidered neckline, on a mannequin
+    "P-1009": _UNSPLASH.format("1760287363878-1a09af715b80"),
 }
 
 # full name, email, role, approval PIN (Senior cashier/Admin only)

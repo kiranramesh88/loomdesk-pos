@@ -13,7 +13,9 @@ from apps.inventory.models import StockMovement
 from apps.inventory.services import record_movement
 from apps.sales.models import InvoiceCounter, Sale
 from apps.store import seed_data
+from config.settings.base import PRODUCTION_SETTINGS
 from apps.store.models import StoreSettings
+from apps.store.reference import ensure_reference_data
 from apps.suppliers.models import Supplier
 
 PHOTO_DIR = settings.BASE_DIR / "seed" / "photos"
@@ -34,9 +36,20 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("--reset", action="store_true", help="Delete existing demo data first.")
+        parser.add_argument(
+            "--refresh-photos",
+            action="store_true",
+            help="Only replace the demo products' photos with the files in seed/photos/. Nothing else changes.",
+        )
 
     @transaction.atomic
     def handle(self, *args, **options):
+        # Demo accounts share a published password, so they must never reach a production database.
+        if settings.SETTINGS_MODULE == PRODUCTION_SETTINGS:
+            raise CommandError("seed_demo is for demo and development databases only; it refuses production settings.")
+        if options["refresh_photos"]:
+            self._refresh_photos()
+            return
         if options["reset"]:
             self._reset()
         elif Product.objects.exists():
@@ -56,6 +69,28 @@ class Command(BaseCommand):
         for full_name, email, role, pin in seed_data.STAFF:
             pin_note = f" - approval PIN {pin}" if pin else ""
             self.stdout.write(f"  {email:<26} {role}{pin_note}")
+
+    def _attach_photo(self, product: Product, code: str) -> bool:
+        photo = PHOTO_DIR / f"{code}.jpg"
+        if not photo.exists():
+            return False
+        old = product.image.name
+        with photo.open("rb") as fh:
+            product.image.save(f"{slugify(product.name)}.jpg", File(fh), save=True)
+        # Like the image endpoint: a replaced file is deleted, not left behind in media/.
+        if old and old != product.image.name:
+            product.image.storage.delete(old)
+        return True
+
+    def _refresh_photos(self):
+        for code, name, _cat, sku, *_rest in seed_data.PRODUCTS:
+            product = Product.objects.filter(sku=sku).first()
+            if product is None:
+                self.stdout.write(f"{code} {name}: not in this database, skipped")
+            elif self._attach_photo(product, code):
+                self.stdout.write(self.style.SUCCESS(f"{code} {name}: photo replaced"))
+            else:
+                self.stdout.write(f"{code} {name}: no file in seed/photos/, unchanged")
 
     def _reset(self):
         # Sales protect the variants and staff they reference, so they go first (with their lines and payments).
@@ -78,18 +113,7 @@ class Command(BaseCommand):
                 user.save(update_fields=["approval_pin_hash"])
 
     def _catalogue(self):
-        rules = {}
-        for spec in seed_data.TAX_RULES:
-            rule = TaxRule(**spec)
-            rule.full_clean()
-            rule.save()
-            rules[rule.name] = rule
-
-        categories = {}
-        for order, (name, hsn, rule_name) in enumerate(seed_data.CATEGORIES):
-            categories[name] = Category.objects.create(
-                name=name, slug=slugify(name), sort_order=order, hsn_code=hsn, tax_rule=rules[rule_name]
-            )
+        _, categories = ensure_reference_data()
 
         opener = User.objects.filter(role="admin").first()
         for p_index, (code, name, cat, sku, price, cost, stock, threshold, sizes, colours) in enumerate(
@@ -102,10 +126,7 @@ class Command(BaseCommand):
                 base_price_paise=price * 100,
                 cost_price_paise=cost * 100,
             )
-            photo = PHOTO_DIR / f"{code}.jpg"
-            if photo.exists():
-                with photo.open("rb") as fh:
-                    product.image.save(f"{slugify(name)}.jpg", File(fh), save=True)
+            self._attach_photo(product, code)
 
             combos = [(s, c) for s in sizes for c in colours]
             reorder = max(1, threshold // len(combos))

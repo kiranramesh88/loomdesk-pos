@@ -63,7 +63,7 @@ These can't be carried over from the prototype.
 
 Each phase ends in something that can be demoed. The backend and frontend for a module ship together, following the spec's order in §10. The big change from that order is that billing comes early.
 
-> **Renumbered on 20 Oct 2026 (the user's call):** Products was built as **Phase 3**, ahead of Billing, and Billing became **Phase 4**. **Phase 5** covered Transactions and an initial sales summary only; voids and Returns are not yet scheduled. **Phase 6** is the Inventory module: stock levels, adjustments and movement history from row 4. **Phase 7** is Suppliers and Purchasing (the supplier half of row 6); Staff and Overview/Reports are not yet scheduled. The table below keeps the original plan for reference; §9 logs the order actually built.
+> **Renumbered on 20 Oct 2026 (the user's call):** Products was built as **Phase 3**, ahead of Billing, and Billing became **Phase 4**. **Phase 5** covered Transactions and an initial sales summary only; voids and Returns are not yet scheduled. **Phase 6** is the Inventory module: stock levels, adjustments and movement history from row 4. **Phase 7** is Suppliers and Purchasing (the supplier half of row 6); Staff and Overview/Reports are not yet scheduled. **Phase 8** is the mobile admin for the modules built so far. **Phase 9** is deployment and production readiness only; row 9's accessibility and visual hardening pass is not yet scheduled. The table below keeps the original plan for reference; §9 logs the order actually built.
 
 | Phase | Scope | Exit criteria |
 |---|---|---|
@@ -396,6 +396,8 @@ None are added until you approve them.
 | `drf-spectacular`, `openapi-typescript` | Typed contract (see §6.1) | Hand-written TS types |
 | `vitest`, `@testing-library/react`, `@playwright/test` | Unit tests for bill maths, and e2e tests at the mobile viewports | None. These are needed to verify §7. |
 | Backend: `django-filter`, `django-cors-headers` (dev only, if not proxied), `pytest-django`, `Pillow` | Filtering, image fields, tests | n/a |
+| Backend: `whitenoise` (Phase 9) | Serves the built SPA and admin assets with `DEBUG=False`, compressed and with far-future caching for hashed files, without a separate web server | A web server (nginx, Caddy) serving `STATIC_ROOT` in front of Django |
+| Backend: `waitress` (Phase 9) | A production WSGI server that runs on Windows as well as Linux; `runserver` isn't for production | Gunicorn (Linux only) |
 
 ---
 
@@ -1095,3 +1097,81 @@ Scope set by the user: a phone-first admin at `/admin/mobile/*` for the overview
 - **Suppliers are read-only on mobile.** Recording payments, editing suppliers, and recording, editing or cancelling purchases stay in the full admin. Receiving is the one write.
 - **Unbuilt modules.** Returns, Staff, Reports and Settings have no mobile pages until their phases.
 - **Tablet and desktop.** Wider screens get the same centred column; there's no separate tablet layout.
+
+### Phase 9: Deployment and production readiness (done, 20 Oct 2026)
+
+Scope set by the user: production configuration, static and frontend delivery, database and media, a security review, and a deployed acceptance run. No new modules.
+
+**Target (the user's choice):** there is no hosting account. The production configuration runs locally (`DEBUG=False`, WhiteNoise, Waitress) against a separate PostgreSQL database, `loomdesk_prod`, and `docs/deployment.md` is a host-agnostic guide. With no public URL, the app is not claimed production-ready for a public host.
+
+**Production configuration (`config/settings/prod.py`):**
+- **Environment only:** production never reads `backend/.env`.
+  - Start-up stops when the secret key is missing, under 50 characters or a known placeholder, or when the allowed hosts or a `POSTGRES_*` value is missing.
+  - SQLite is refused.
+  - `config/test_production.py` proves each refusal in a subprocess with a clean environment.
+- **HTTPS:** secure session and CSRF cookies, HSTS, SSL redirect, and `X-Forwarded-Proto` from the proxy.
+  - Also nosniff, a same-origin referrer policy, `X-Frame-Options: DENY` and 12-hour sessions.
+  - Redirect and HSTS can be turned off by variable, for a local run only.
+- **Database:** PostgreSQL with configurable `sslmode`, a connect timeout, and pooled connections with health checks.
+- **Errors:** logs go to stdout. Production 404 and 500 responses are JSON envelopes under `/api/` and plain text elsewhere, never a debug page. The OpenAPI schema and Swagger UI are admin-only.
+- **Store setup without demo data:** `seed_demo` refuses production settings.
+  - `setup_store` creates the store record, GST rules and categories, and warns while the receipt details are still the demo store's.
+  - `create_staff` creates real accounts. It rejects the demo password and weak passwords, and never takes a password as an argument.
+
+**Static and media:**
+- `collectstatic` gathers the Vite build into `STATIC_ROOT`, and WhiteNoise serves it compressed.
+- Vite's hashed files get a one-year immutable cache, and `index.html` gets `no-cache`. A missing asset is a plain 404, not the SPA.
+- Uploads go to `DJANGO_MEDIA_ROOT`, a directory outside the code. Django serves it, or a proxy does with `DJANGO_SERVE_MEDIA=false`.
+- Deploy checks `loomdesk.E001`–`E004` fail `check --deploy` when the build or collected assets are missing, or the cache is unsuitable.
+
+**Security finding fixed: the lockout and throttle never fired on PostgreSQL.**
+- **The problem:** with `ATOMIC_REQUESTS`, DRF rolls back the request's transaction on an error response, so a database cache on that connection lost the very failures it was counting. Process-local memory isn't shared between workers either.
+- **The fix:** the cache now has its own autocommit alias on the same database (`config/routers.py`). Every worker and instance shares it, and it needs no new service.
+- **The guard:** check E004 rejects a cache on an atomic alias.
+
+**Database:** `deploy/postgres/create_database.sql` creates the application role and its database.
+- The role has no superuser, `CREATEDB` or `CREATEROLE`, and owns only its database. `CONNECT` is revoked from `PUBLIC`.
+- psql prompts for the password, and the script stops without changes if the role or the database already exists.
+- The user ran it as `postgres`. Afterwards I verified that `loomdesk_app` has no superuser, `CREATEDB` or `CREATEROLE`, and that the dev role `loomdesk` can't connect to `loomdesk_prod`.
+
+**Demo photos:** `seed_data.PHOTO_URLS` now points at Unsplash photos that match each product (Unsplash License, no Unsplash+).
+- Replaced: the shirt, kurta, midi dress, tee, chinos and kurti.
+- `fetch_seed_photos --force` re-downloads them.
+- `seed_demo --refresh-photos` replaces only the photos on an existing demo database. I ran it on the dev database; sales, stock and movements are unchanged.
+
+**Validation:**
+- **Frontend:** typecheck, lint and build clean; 257 tests pass.
+- **Backend:** 334 passed on PostgreSQL. On SQLite, 331 passed and 3 were skipped (the PostgreSQL-only concurrency tests).
+- **Schema:** unchanged and valid.
+- **Smoke tests (Waitress, production settings, `loomdesk_prod`):**
+  - Hashed JS and CSS are gzip-compressed with an immutable cache.
+  - A missing asset and a missing photo return a text 404.
+  - Unknown `/api/` paths get the JSON 404 envelope.
+  - An unknown `Host` gets 400.
+  - The schema gets 403 when signed out.
+  - The CSRF cookie is `Secure`.
+- **Acceptance run (Playwright through the UI, checked through the API):**
+  - **Product:** the admin signed in and created a product with two variants and a photo.
+  - **Purchase:** recorded from a new supplier with no stock change, then received: +6 and +4, two `purchase` movements, and a second receive refused with 409.
+  - **Sale:** the cashier sold one unit at the till, taking stock from 6 to 5.
+  - **Reprint:** the admin opened the transaction and reprinted twice. No write requests were sent, and the sale, movement and stock counts didn't change.
+  - **Cashier limits:** sent to 403 on an admin URL, refused with 403 by six admin APIs, and shown no cost prices.
+  - **Routing:** five nested routes survived a refresh, and a signed-out deep link went to login and back.
+  - **Layouts:** the mobile admin fit at 360 and 390 px, with no sideways scroll at tablet or desktop width.
+  - **Media:** after a server restart, the uploaded photo was still served.
+- **On the production configuration:**
+  - Five wrong PINs were refused; the sixth attempt, and then the correct PIN, were locked out, and nothing was written.
+  - Login returned 429 after ten attempts a minute.
+  - Both counters were rows in `loomdesk_prod`'s cache table.
+
+**Limits and deferred items (also in `docs/deployment.md` §8):**
+- **Lockout race:** the counter is a read-then-write, so simultaneous wrong PINs can allow one or two extra attempts.
+- **No CSP header yet,** and the `/django-admin/` login isn't throttled.
+- **One database role:** the runtime role also runs migrations.
+- **Host duties:** backups and TLS belong to the host.
+- **Not built yet:**
+  - Returns, Staff, Reports and Settings, and their mobile pages. Until Settings exists, `setup_store` sets the store's receipt details.
+  - Voids.
+  - The "every admin section reachable from More" checklist item stays open until those modules exist.
+- **Not yet run:** the accessibility and visual hardening pass from row 9 of §1.
+- **Product form (left as is):** a scripted `fill` of the variant SKU straight from the Colour field appends to the suggested SKU, because the suggestion is written when Colour loses focus. A person who clicks or tabs into the field sees the suggestion first.

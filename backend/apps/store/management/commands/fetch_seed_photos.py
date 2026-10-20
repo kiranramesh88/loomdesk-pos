@@ -14,11 +14,14 @@ MAX_BYTES = 8 * 1024 * 1024
 class Command(BaseCommand):
     help = "Download the demo product photos into backend/seed/photos/ (re-encoded as JPEG)."
 
+    def add_arguments(self, parser):
+        parser.add_argument("--force", action="store_true", help="Download again even if a file is already present.")
+
     def handle(self, *args, **options):
         PHOTO_DIR.mkdir(parents=True, exist_ok=True)
         for code, url in PHOTO_URLS.items():
             target = PHOTO_DIR / f"{code}.jpg"
-            if target.exists():
+            if target.exists() and not options["force"]:
                 self.stdout.write(f"{code}: already present")
                 continue
             try:

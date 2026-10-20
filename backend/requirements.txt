@@ -4,3 +4,6 @@ drf-spectacular>=0.28
 django-filter>=25.1
 psycopg[binary]>=3.2
 Pillow>=11.0
+# Production serving: static files without a separate web server, and a WSGI server that runs on Linux and Windows.
+whitenoise>=6.9,<7
+waitress>=3.0,<4

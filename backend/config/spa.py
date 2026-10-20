@@ -22,4 +22,7 @@ def spa_index(request: HttpRequest) -> HttpResponse:
             status=404,
             content_type="text/plain",
         )
-    return HttpResponse(index.read_text(encoding="utf-8"), content_type="text/html")
+    response = HttpResponse(index.read_text(encoding="utf-8"), content_type="text/html")
+    # The shell names the current build's hashed assets, so browsers must revalidate it after a deploy.
+    response["Cache-Control"] = "no-cache"
+    return response
