@@ -1,6 +1,14 @@
 import type { PaymentMethod } from '@/types/domain'
 
-/** Transaction search and filters, mirrored in the URL (?q=&from=&to=&cashier=&method=&page=). Plan §2. */
+/**
+ * One status filter over two API filters: the sale's own status (completed or voided) and its derived
+ * return state. Partly returned and returned bills are always completed ones.
+ */
+export type StatusFilter = '' | 'completed' | 'voided' | 'partial' | 'returned'
+
+export const STATUS_FILTERS: readonly Exclude<StatusFilter, ''>[] = ['completed', 'voided', 'partial', 'returned']
+
+/** Transaction search and filters, mirrored in the URL (?q=&from=&to=&cashier=&method=&status=&page=). Plan §2. */
 export interface TransactionParams {
   q: string
   /** Store dates, YYYY-MM-DD. */
@@ -8,6 +16,7 @@ export interface TransactionParams {
   to: string
   cashier: string
   method: PaymentMethod | ''
+  status: StatusFilter
   page: number
 }
 
@@ -26,12 +35,14 @@ export function readParams(search: URLSearchParams): TransactionParams {
   const method = search.get('method') as PaymentMethod
   const from = search.get('from') ?? ''
   const to = search.get('to') ?? ''
+  const status = search.get('status') as StatusFilter
   return {
     q: search.get('q')?.trim() ?? '',
     from: isDate(from) ? from : '',
     to: isDate(to) ? to : '',
     cashier: /^\d+$/.test(cashier) ? cashier : '',
     method: METHODS.includes(method) ? method : '',
+    status: STATUS_FILTERS.includes(status as Exclude<StatusFilter, ''>) ? status : '',
     page: Number.isInteger(page) && page > 1 ? page : 1,
   }
 }
@@ -44,6 +55,7 @@ export function writeParams(params: TransactionParams): URLSearchParams {
   if (params.to) search.set('to', params.to)
   if (params.cashier) search.set('cashier', params.cashier)
   if (params.method) search.set('method', params.method)
+  if (params.status) search.set('status', params.status)
   if (params.page > 1) search.set('page', String(params.page))
   return search
 }
@@ -56,6 +68,11 @@ export function filterQuery(params: TransactionParams): Record<string, string> {
   if (params.to) query.date_to = params.to
   if (params.cashier) query.cashier = params.cashier
   if (params.method) query.method = params.method
+  if (params.status === 'completed' || params.status === 'voided') query.status = params.status
+  if (params.status === 'partial' || params.status === 'returned') {
+    query.status = 'completed'
+    query.return_state = params.status
+  }
   return query
 }
 
@@ -66,7 +83,7 @@ export const listQuery = (params: TransactionParams): Record<string, string> => 
 })
 
 export const hasFilters = (params: TransactionParams) =>
-  !!(params.q || params.from || params.to || params.cashier || params.method)
+  !!(params.q || params.from || params.to || params.cashier || params.method || params.status)
 
 /** A start date after the end date: the API refuses it, so the page explains instead of asking. */
 export const rangeIsBackwards = (params: TransactionParams) => !!(params.from && params.to && params.from > params.to)

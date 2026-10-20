@@ -54,11 +54,18 @@ export const queryKeys = {
   },
   sales: {
     all: ['sales'] as const,
-    /** Lists, summaries and the cashier filter: every new sale invalidates these. A saved sale's detail never changes. */
+    /** Lists, summaries and the cashier filter: every new sale invalidates these. A sale's detail changes only on a void or return. */
     history: ['sales', 'history'] as const,
     list: (params: Record<string, string>) => ['sales', 'history', 'list', params] as const,
     summary: (params: Record<string, string>) => ['sales', 'history', 'summary', params] as const,
     cashiers: ['sales', 'history', 'cashiers'] as const,
     detail: (invoiceNo: string) => ['sales', 'detail', invoiceNo] as const,
+  },
+  returns: {
+    /** Return lists, details and what each sale can still return: every return and void invalidates this prefix. */
+    all: ['returns'] as const,
+    list: (params: Record<string, string>) => ['returns', 'list', params] as const,
+    detail: (number: string) => ['returns', 'detail', number] as const,
+    returnable: (invoiceNo: string) => ['returns', 'returnable', invoiceNo] as const,
   },
 } as const

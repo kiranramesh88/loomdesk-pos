@@ -510,11 +510,13 @@ paths:
           - purchase
           - return
           - sale
+          - void
         description: |-
           * `opening` - Opening stock
           * `purchase` - Purchase received
           * `sale` - Sale
           * `return` - Customer return
+          * `void` - Sale voided
           * `adjust_add` - Adjustment (add)
           * `adjust_remove` - Adjustment (remove)
           * `count` - Stock count
@@ -651,6 +653,187 @@ paths:
               schema:
                 $ref: '#/components/schemas/InventoryVariant'
           description: ''
+  /api/v1/returns/:
+    get:
+      operationId: returns_list
+      description: 'GET: returns, newest first. POST: record a return and its refund.
+        Admin only (decision D1).'
+      parameters:
+      - in: query
+        name: date_from
+        schema:
+          type: string
+          format: date
+        description: On or after (store time)
+      - in: query
+        name: date_to
+        schema:
+          type: string
+          format: date
+        description: On or before (store time)
+      - in: query
+        name: disposition
+        schema:
+          type: string
+          enum:
+          - damaged
+          - inspection
+          - sellable
+        description: |-
+          * `sellable` - Back to stock
+          * `damaged` - Damaged
+          * `inspection` - Inspection hold
+      - in: query
+        name: method
+        schema:
+          type: string
+          enum:
+          - card
+          - cash
+          - upi
+        description: |-
+          * `cash` - Cash
+          * `upi` - UPI
+          * `card` - Card
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: q
+        schema:
+          type: string
+        description: Return or invoice number (or part of it)
+      tags:
+      - returns
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedReturnListItemList'
+          description: ''
+    post:
+      operationId: returns_create
+      description: Record a return. 201 when written; 200 when the same Idempotency-Key
+        was already used for it.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: UUID made when the review step opens. Retrying with the same
+          key returns the original return.
+        required: true
+      tags:
+      - returns
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReturnCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ReturnCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ReturnCreateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Return'
+          description: ''
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Return'
+          description: ''
+  /api/v1/returns/{number}/:
+    get:
+      operationId: returns_retrieve
+      parameters:
+      - in: path
+        name: number
+        schema:
+          type: string
+        required: true
+      tags:
+      - returns
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Return'
+          description: ''
+  /api/v1/returns/invoice/{invoice_no}/:
+    get:
+      operationId: returns_invoice_retrieve
+      description: A sale's lines with sold, already returned and still returnable
+        quantities.
+      parameters:
+      - in: path
+        name: invoice_no
+        schema:
+          type: string
+        required: true
+      tags:
+      - returns
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReturnableSale'
+          description: ''
+  /api/v1/returns/quote/:
+    post:
+      operationId: returns_quote_create
+      description: Work out a return's refund without saving anything, for the review
+        step.
+      tags:
+      - returns
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReturnRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ReturnRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ReturnRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReturnQuote'
+          description: ''
   /api/v1/sales/:
     get:
       operationId: sales_list
@@ -705,12 +888,27 @@ paths:
           type: string
         description: Invoice number (or part of it)
       - in: query
+        name: return_state
+        schema:
+          type: string
+          enum:
+          - none
+          - partial
+          - returned
+        description: |-
+          * `none` - none
+          * `partial` - partial
+          * `returned` - returned
+      - in: query
         name: status
         schema:
           type: string
           enum:
           - completed
-        description: '* `completed` - Completed'
+          - voided
+        description: |-
+          * `completed` - Completed
+          * `voided` - Voided
       tags:
       - sales
       security:
@@ -776,6 +974,41 @@ paths:
         required: true
       tags:
       - sales
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sale'
+          description: ''
+  /api/v1/sales/{invoice_no}/void/:
+    post:
+      operationId: sales_void_create
+      description: |-
+        Void today's sale made by mistake: Admin only, with a reason (decision D1, D2). The stock goes back;
+        the sale's lines, totals and payment are kept, marked voided.
+      parameters:
+      - in: path
+        name: invoice_no
+        schema:
+          type: string
+        required: true
+      tags:
+      - sales
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VoidRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VoidRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VoidRequest'
+        required: true
       security:
       - cookieAuth: []
       responses:
@@ -1980,6 +2213,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PurchaseListItem'
+    PaginatedReturnListItemList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReturnListItem'
     PaginatedSaleListItemList:
       type: object
       required:
@@ -2819,6 +3075,501 @@ components:
       - total_paise
       - unit_price_paise
       - variant
+    QuotedLine:
+      type: object
+      properties:
+        subtotal_paise:
+          type: integer
+        discount_paise:
+          type: integer
+        taxable_paise:
+          type: integer
+        tax_paise:
+          type: integer
+        total_paise:
+          type: integer
+        sale_line:
+          type: integer
+        quantity:
+          type: integer
+        disposition:
+          $ref: '#/components/schemas/ReturnDispositionEnum'
+      required:
+      - discount_paise
+      - disposition
+      - quantity
+      - sale_line
+      - subtotal_paise
+      - tax_paise
+      - taxable_paise
+      - total_paise
+    Refund:
+      type: object
+      properties:
+        method:
+          allOf:
+          - $ref: '#/components/schemas/PaymentMethodEnum'
+          readOnly: true
+        amount_paise:
+          type: integer
+          readOnly: true
+        reference:
+          type: string
+          readOnly: true
+        gateway_verified:
+          type: boolean
+          readOnly: true
+        recorded_at:
+          type: string
+          format: date-time
+          readOnly: true
+        recorded_by_name:
+          type: string
+          readOnly: true
+      required:
+      - amount_paise
+      - gateway_verified
+      - method
+      - recorded_at
+      - recorded_by_name
+      - reference
+    RefundFigures:
+      type: object
+      properties:
+        subtotal_paise:
+          type: integer
+        discount_paise:
+          type: integer
+        taxable_paise:
+          type: integer
+        tax_paise:
+          type: integer
+        total_paise:
+          type: integer
+      required:
+      - discount_paise
+      - subtotal_paise
+      - tax_paise
+      - taxable_paise
+      - total_paise
+    RefundInputRequest:
+      type: object
+      properties:
+        method:
+          $ref: '#/components/schemas/PaymentMethodEnum'
+        reference:
+          type: string
+          maxLength: 40
+      required:
+      - method
+    Return:
+      type: object
+      properties:
+        number:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        created_by_name:
+          type: string
+          readOnly: true
+        invoice_no:
+          type: string
+          readOnly: true
+        sale_created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        reason:
+          allOf:
+          - $ref: '#/components/schemas/ReturnReasonEnum'
+          readOnly: true
+        note:
+          type: string
+          readOnly: true
+        subtotal_paise:
+          type: integer
+          readOnly: true
+        discount_paise:
+          type: integer
+          readOnly: true
+        taxable_paise:
+          type: integer
+          readOnly: true
+        tax_paise:
+          type: integer
+          readOnly: true
+        total_paise:
+          type: integer
+          readOnly: true
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReturnLine'
+          readOnly: true
+        refund:
+          allOf:
+          - $ref: '#/components/schemas/Refund'
+          readOnly: true
+      required:
+      - created_at
+      - created_by_name
+      - discount_paise
+      - invoice_no
+      - lines
+      - note
+      - number
+      - reason
+      - refund
+      - sale_created_at
+      - subtotal_paise
+      - tax_paise
+      - taxable_paise
+      - total_paise
+    ReturnCreateRequest:
+      type: object
+      properties:
+        invoice_no:
+          type: string
+          minLength: 1
+          maxLength: 20
+        reason:
+          $ref: '#/components/schemas/ReturnReasonEnum'
+        note:
+          type: string
+          default: ''
+          maxLength: 200
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReturnLineInputRequest'
+        refund:
+          $ref: '#/components/schemas/RefundInputRequest'
+        expected_total_paise:
+          type: integer
+          minimum: 0
+      required:
+      - expected_total_paise
+      - invoice_no
+      - lines
+      - reason
+      - refund
+    ReturnDispositionEnum:
+      enum:
+      - sellable
+      - damaged
+      - inspection
+      type: string
+      description: |-
+        * `sellable` - Back to stock
+        * `damaged` - Damaged
+        * `inspection` - Inspection hold
+    ReturnLine:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        sale_line:
+          type: integer
+          readOnly: true
+        variant:
+          type: integer
+          readOnly: true
+        product_name:
+          type: string
+          readOnly: true
+        variant_sku:
+          type: string
+          readOnly: true
+        size:
+          type: string
+          readOnly: true
+        colour:
+          type: string
+          readOnly: true
+        sold_quantity:
+          type: integer
+          readOnly: true
+        quantity:
+          type: integer
+          readOnly: true
+        disposition:
+          allOf:
+          - $ref: '#/components/schemas/ReturnDispositionEnum'
+          readOnly: true
+        subtotal_paise:
+          type: integer
+          readOnly: true
+        discount_paise:
+          type: integer
+          readOnly: true
+        taxable_paise:
+          type: integer
+          readOnly: true
+        tax_paise:
+          type: integer
+          readOnly: true
+        total_paise:
+          type: integer
+          readOnly: true
+      required:
+      - colour
+      - discount_paise
+      - disposition
+      - id
+      - product_name
+      - quantity
+      - sale_line
+      - size
+      - sold_quantity
+      - subtotal_paise
+      - tax_paise
+      - taxable_paise
+      - total_paise
+      - variant
+      - variant_sku
+    ReturnLineInputRequest:
+      type: object
+      properties:
+        sale_line:
+          type: integer
+          minimum: 1
+        quantity:
+          type: integer
+          maximum: 999
+          minimum: 1
+        disposition:
+          $ref: '#/components/schemas/ReturnDispositionEnum'
+      required:
+      - disposition
+      - quantity
+      - sale_line
+    ReturnListItem:
+      type: object
+      properties:
+        number:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        invoice_no:
+          type: string
+          readOnly: true
+        reason:
+          allOf:
+          - $ref: '#/components/schemas/ReturnReasonEnum'
+          readOnly: true
+        units:
+          type: integer
+          readOnly: true
+        total_paise:
+          type: integer
+          readOnly: true
+        refund_method:
+          allOf:
+          - $ref: '#/components/schemas/PaymentMethodEnum'
+          readOnly: true
+        dispositions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReturnDispositionEnum'
+          readOnly: true
+        created_by_name:
+          type: string
+          readOnly: true
+      required:
+      - created_at
+      - created_by_name
+      - dispositions
+      - invoice_no
+      - number
+      - reason
+      - refund_method
+      - total_paise
+      - units
+    ReturnQuote:
+      type: object
+      properties:
+        invoice_no:
+          type: string
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuotedLine'
+        totals:
+          $ref: '#/components/schemas/RefundFigures'
+      required:
+      - invoice_no
+      - lines
+      - totals
+    ReturnReasonEnum:
+      enum:
+      - size_fit
+      - defect
+      - not_as_expected
+      - wrong_item
+      - other
+      type: string
+      description: |-
+        * `size_fit` - Size or fit
+        * `defect` - Damaged or defective
+        * `not_as_expected` - Not as expected
+        * `wrong_item` - Wrong item
+        * `other` - Other
+    ReturnRequestRequest:
+      type: object
+      properties:
+        invoice_no:
+          type: string
+          minLength: 1
+          maxLength: 20
+        reason:
+          $ref: '#/components/schemas/ReturnReasonEnum'
+        note:
+          type: string
+          default: ''
+          maxLength: 200
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReturnLineInputRequest'
+        refund:
+          $ref: '#/components/schemas/RefundInputRequest'
+      required:
+      - invoice_no
+      - lines
+      - reason
+      - refund
+    ReturnStateEnum:
+      enum:
+      - none
+      - partial
+      - returned
+      type: string
+      description: |-
+        * `none` - none
+        * `partial` - partial
+        * `returned` - returned
+    ReturnableLine:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        product_name:
+          type: string
+          readOnly: true
+        variant_sku:
+          type: string
+          readOnly: true
+        size:
+          type: string
+          readOnly: true
+        colour:
+          type: string
+          readOnly: true
+        quantity:
+          type: integer
+          readOnly: true
+        unit_price_paise:
+          type: integer
+          readOnly: true
+        discount_paise:
+          type: integer
+          readOnly: true
+        tax_rate_bp:
+          type: integer
+          readOnly: true
+        total_paise:
+          type: integer
+          readOnly: true
+        returned:
+          type: integer
+          readOnly: true
+        eligible:
+          type: integer
+          readOnly: true
+      required:
+      - colour
+      - discount_paise
+      - eligible
+      - id
+      - product_name
+      - quantity
+      - returned
+      - size
+      - tax_rate_bp
+      - total_paise
+      - unit_price_paise
+      - variant_sku
+    ReturnableSale:
+      type: object
+      description: 'A sale as the return wizard needs it: what was sold, what already
+        came back, what still can.'
+      properties:
+        invoice_no:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/SaleStatusEnum'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        cashier_name:
+          type: string
+          readOnly: true
+        total_paise:
+          type: integer
+          readOnly: true
+        payment_method:
+          allOf:
+          - $ref: '#/components/schemas/PaymentMethodEnum'
+          readOnly: true
+        refund_methods:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentMethodEnum'
+          readOnly: true
+        can_return:
+          type: boolean
+          readOnly: true
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReturnableLine'
+          readOnly: true
+        returns:
+          type: array
+          items:
+            type: object
+            properties:
+              number:
+                type: string
+              total_paise:
+                type: integer
+            required:
+            - number
+            - total_paise
+          readOnly: true
+      required:
+      - can_return
+      - cashier_name
+      - created_at
+      - invoice_no
+      - lines
+      - payment_method
+      - refund_methods
+      - returns
+      - status
+      - total_paise
     RoleEnum:
       enum:
       - admin
@@ -2831,8 +3582,10 @@ components:
         * `cashier` - Cashier
     Sale:
       type: object
-      description: A saved sale as its receipt shows it. Every figure comes from the
-        stored snapshot.
+      description: |-
+        A saved sale as its receipt shows it. Every figure comes from the stored snapshot.
+
+        Expects `sale_queryset()`'s prefetches (lines with their return lines, and returns).
       properties:
         invoice_no:
           type: string
@@ -2904,6 +3657,33 @@ components:
           allOf:
           - $ref: '#/components/schemas/Payment'
           readOnly: true
+        voided_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        voided_by_name:
+          type: string
+          nullable: true
+          readOnly: true
+        void_reason:
+          type: string
+          readOnly: true
+        return_state:
+          allOf:
+          - $ref: '#/components/schemas/ReturnStateEnum'
+          readOnly: true
+        returned_units:
+          type: integer
+          readOnly: true
+        refunded_paise:
+          type: integer
+          readOnly: true
+        returns:
+          type: array
+          items:
+            $ref: '#/components/schemas/SaleReturn'
+          readOnly: true
       required:
       - cashier_name
       - created_at
@@ -2913,6 +3693,10 @@ components:
       - lines
       - payment
       - prices_include_tax
+      - refunded_paise
+      - return_state
+      - returned_units
+      - returns
       - status
       - store
       - subtotal_paise
@@ -2920,6 +3704,9 @@ components:
       - tax_paise
       - taxable_paise
       - total_paise
+      - void_reason
+      - voided_at
+      - voided_by_name
     SaleCashier:
       type: object
       properties:
@@ -3049,6 +3836,10 @@ components:
         gateway_verified:
           type: boolean
           readOnly: true
+        return_state:
+          allOf:
+          - $ref: '#/components/schemas/ReturnStateEnum'
+          readOnly: true
       required:
       - cashier
       - cashier_name
@@ -3058,13 +3849,31 @@ components:
       - invoice_no
       - item_count
       - payment_method
+      - return_state
       - status
+      - total_paise
+    SaleReturn:
+      type: object
+      properties:
+        number:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        total_paise:
+          type: integer
+      required:
+      - created_at
+      - number
       - total_paise
     SaleStatusEnum:
       enum:
       - completed
+      - voided
       type: string
-      description: '* `completed` - Completed'
+      description: |-
+        * `completed` - Completed
+        * `voided` - Voided
     SalesSummary:
       type: object
       description: Completed sales matching the filters, summed from their saved totals
@@ -3333,6 +4142,7 @@ components:
       - purchase
       - sale
       - return
+      - void
       - adjust_add
       - adjust_remove
       - count
@@ -3342,6 +4152,7 @@ components:
         * `purchase` - Purchase received
         * `sale` - Sale
         * `return` - Customer return
+        * `void` - Sale voided
         * `adjust_add` - Adjustment (add)
         * `adjust_remove` - Adjustment (remove)
         * `count` - Stock count
@@ -3826,6 +4637,15 @@ components:
       - colour
       - size
       - sku
+    VoidRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 200
+      required:
+      - reason
   securitySchemes:
     cookieAuth:
       type: apiKey

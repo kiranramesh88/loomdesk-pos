@@ -185,23 +185,65 @@ class PaymentSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+RETURN_STATES = ["none", "partial", "returned"]
+
+
+def return_state(sold_units: int, returned_units: int) -> str:
+    """Derived, never stored: the sale itself doesn't change when goods come back."""
+    if not returned_units:
+        return "none"
+    return "returned" if returned_units >= sold_units else "partial"
+
+
+class SaleReturnSerializer(serializers.Serializer):
+    number = serializers.CharField()
+    created_at = serializers.DateTimeField()
+    total_paise = serializers.IntegerField()
+
+
 class SaleSerializer(serializers.ModelSerializer):
-    """A saved sale as its receipt shows it. Every figure comes from the stored snapshot."""
+    """A saved sale as its receipt shows it. Every figure comes from the stored snapshot.
+
+    Expects `sale_queryset()`'s prefetches (lines with their return lines, and returns)."""
 
     lines = SaleLineSerializer(many=True, read_only=True)
     payment = PaymentSerializer(read_only=True)
     tax_breakdown = serializers.SerializerMethodField()
     store = serializers.SerializerMethodField()
     discount_approved_by_name = serializers.SerializerMethodField()
+    voided_by_name = serializers.SerializerMethodField()
+    return_state = serializers.SerializerMethodField()
+    returned_units = serializers.SerializerMethodField()
+    refunded_paise = serializers.SerializerMethodField()
+    returns = serializers.SerializerMethodField()
 
     class Meta:
         model = Sale
         fields = [
             "invoice_no", "status", "created_at", "cashier_name", "store", "prices_include_tax", "subtotal_paise",
             "discount_paise", "taxable_paise", "tax_paise", "total_paise", "discount_approved_by_name", "lines",
-            "tax_breakdown", "payment",
+            "tax_breakdown", "payment", "voided_at", "voided_by_name", "void_reason", "return_state",
+            "returned_units", "refunded_paise", "returns",
         ]
         read_only_fields = fields
+
+    @extend_schema_field({"type": "string", "nullable": True})
+    def get_voided_by_name(self, sale: Sale) -> str | None:
+        return sale.voided_by_name or None
+
+    def get_returned_units(self, sale: Sale) -> int:
+        return sum(rl.quantity for line in sale.lines.all() for rl in line.return_lines.all())
+
+    @extend_schema_field(serializers.ChoiceField(choices=RETURN_STATES))
+    def get_return_state(self, sale: Sale) -> str:
+        return return_state(sum(line.quantity for line in sale.lines.all()), self.get_returned_units(sale))
+
+    def get_refunded_paise(self, sale: Sale) -> int:
+        return sum(ret.total_paise for ret in sale.returns.all())
+
+    @extend_schema_field(SaleReturnSerializer(many=True))
+    def get_returns(self, sale: Sale) -> list[dict]:
+        return SaleReturnSerializer(sorted(sale.returns.all(), key=lambda r: r.pk), many=True).data
 
     @extend_schema_field({"type": "string", "nullable": True})
     def get_discount_approved_by_name(self, sale: Sale) -> str | None:
@@ -235,14 +277,24 @@ class SaleListItemSerializer(serializers.ModelSerializer):
     item_count = serializers.IntegerField(read_only=True, help_text="Units sold on the bill (sum of line quantities).")
     payment_method = serializers.ChoiceField(source="payment.method", choices=Payment.Method.choices, read_only=True)
     gateway_verified = serializers.BooleanField(source="payment.gateway_verified", read_only=True)
+    return_state = serializers.SerializerMethodField()
 
     class Meta:
         model = Sale
         fields = [
             "invoice_no", "status", "created_at", "cashier", "cashier_name", "item_count", "discount_paise",
-            "total_paise", "payment_method", "gateway_verified",
+            "total_paise", "payment_method", "gateway_verified", "return_state",
         ]
         read_only_fields = fields
+
+
+    @extend_schema_field(serializers.ChoiceField(choices=RETURN_STATES))
+    def get_return_state(self, sale: Sale) -> str:
+        return return_state(sale.item_count or 0, sale.returned_units or 0)
+
+
+class VoidSerializer(serializers.Serializer):
+    reason = serializers.CharField(max_length=200, trim_whitespace=True)
 
 
 class SaleCashierSerializer(serializers.ModelSerializer):

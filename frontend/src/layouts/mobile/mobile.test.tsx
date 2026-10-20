@@ -25,13 +25,20 @@ const MOVEMENT = {
 }
 const SALE_ROW = {
   invoice_no: 'LD-000042', status: 'completed', created_at: '2026-10-20T10:30:00Z', cashier: 4, cashier_name: 'Anjali Prakash',
-  item_count: 3, discount_paise: 0, total_paise: 605790, payment_method: 'upi', gateway_verified: false,
+  item_count: 3, discount_paise: 0, total_paise: 605790, payment_method: 'upi', gateway_verified: false, return_state: 'none',
 }
 const SALE = {
   invoice_no: 'LD-000042', status: 'completed', created_at: '2026-10-20T10:30:00Z', cashier_name: 'Anjali Prakash',
   store: { name: 'Loom & Linen', code: 'LL-KKD-01', address: 'Beach Road, Kozhikode', state: 'Kerala', gstin: '32ABCDE1234F1Z5' },
   prices_include_tax: false, subtotal_paise: 239800, discount_paise: 0, taxable_paise: 239800, tax_paise: 11990, total_paise: 251790,
   discount_approved_by_name: null,
+  voided_at: null,
+  voided_by_name: null,
+  void_reason: '',
+  return_state: 'none',
+  returned_units: 0,
+  refunded_paise: 0,
+  returns: [],
   lines: [
     {
       id: 1, variant: 31, product_name: 'Classic Cotton Shirt', product_sku: 'SH-CT-001', variant_sku: 'SH-CT-001-M', size: 'M',
@@ -270,6 +277,30 @@ describe('mobile bills', () => {
     expect(print).toHaveBeenCalledTimes(1)
     expect(screen.getAllByText('LD-000042').length).toBeGreaterThan(0)
     expect(writes(calls)).toHaveLength(0)
+  })
+
+  it('shows a voided, partly returned bill as such, in text', async () => {
+    mockApi({
+      handler: (url) =>
+        url.pathname.endsWith('/sales/LD-000042/')
+          ? jsonResponse(200, {
+              ...SALE,
+              status: 'voided',
+              voided_at: '2026-10-20T11:00:00Z',
+              voided_by_name: 'Kiran Ramesh',
+              void_reason: 'Rang up twice',
+              return_state: 'partial',
+              refunded_paise: 50000,
+              returns: [{ number: 'RET-000003', created_at: '2026-10-20T10:45:00Z', total_paise: 50000 }],
+            })
+          : undefined,
+    })
+    renderRoutes(routes, '/admin/mobile/bills/LD-000042')
+    expect(await screen.findByText('This bill was voided')).toBeInTheDocument()
+    expect(screen.getByText(/Rang up twice/)).toBeInTheDocument()
+    expect(screen.getByText('Voided')).toBeInTheDocument()
+    expect(screen.getByText('Partly returned')).toBeInTheDocument()
+    expect(screen.getByText('RET-000003 · ₹500.00 refunded')).toBeInTheDocument()
   })
 
   it('shows a missing bill as not found', async () => {

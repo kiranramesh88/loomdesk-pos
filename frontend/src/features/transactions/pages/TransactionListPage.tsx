@@ -12,16 +12,16 @@ import { InlineAlert } from '@/components/ui/InlineAlert'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Pagination } from '@/components/ui/Pagination'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { StatusBadge } from '@/components/ui/StatusBadge'
 import { ApiError } from '@/lib/http'
 import { formatMoney } from '@/lib/money'
 import { MEDIA, useMediaQuery } from '@/lib/useMediaQuery'
 import type { SaleListItem } from '@/types/domain'
 
 import { useSaleCashiers, useSalesSummary, useTransactions } from '../api'
+import { SaleStatusBadges } from '../components/SaleStatus'
 import { SummaryBreakdown, SummaryFigures } from '../components/SalesSummary'
 import { TransactionToolbar } from '../components/TransactionToolbar'
-import { formatSaleTime, isManuallyRecorded, itemsLabel, PAYMENT_LABELS, SALE_STATUS_LABELS } from '../labels'
+import { formatSaleTime, isManuallyRecorded, itemsLabel, PAYMENT_LABELS } from '../labels'
 import { hasFilters, PAGE_SIZE, rangeIsBackwards, readParams, writeParams, type TransactionParams } from '../transactionParams'
 
 function InvoiceLink({ sale }: { sale: SaleListItem }) {
@@ -41,9 +41,7 @@ function Payment({ sale }: { sale: SaleListItem }) {
   )
 }
 
-const statusBadge = (sale: SaleListItem) => (
-  <StatusBadge tone={SALE_STATUS_LABELS[sale.status].tone}>{SALE_STATUS_LABELS[sale.status].label}</StatusBadge>
-)
+const statusBadge = (sale: SaleListItem) => <SaleStatusBadges status={sale.status} returnState={sale.return_state} />
 
 const COLUMNS: Column<SaleListItem>[] = [
   { id: 'invoice', header: 'Invoice', width: '130px', cell: (s) => <InvoiceLink sale={s} /> },
@@ -59,7 +57,7 @@ const COLUMNS: Column<SaleListItem>[] = [
     cell: (s) => <span className="type-amount">{formatMoney(s.total_paise)}</span>,
   },
   // The invoice number is the row's link; a separate "View" button would only repeat it.
-  { id: 'status', header: 'Status', width: '120px', cell: statusBadge },
+  { id: 'status', header: 'Status', width: '170px', cell: statusBadge },
 ]
 
 /** Phone and tablet layout: one card per bill, the detail page holding the rest (spec §4 "Data tables"). */
@@ -134,7 +132,7 @@ export function TransactionListPage() {
     <EmptyState
       icon={<SearchX />}
       title="No transactions match"
-      description="Try another invoice number or date range, or clear the filters to see every bill."
+      description="Try another invoice number, date range or status, or clear the filters to see every bill."
       action={<Button onClick={clear}>Clear filters</Button>}
     />
   ) : (
@@ -183,7 +181,7 @@ export function TransactionListPage() {
             onRetry={() => void transactions.refetch()}
             retrying={transactions.isRefetching}
             empty={empty}
-            minWidth="900px"
+            minWidth="950px"
           />
         ) : transactions.error ? (
           <ErrorState

@@ -3,15 +3,16 @@ import { Printer } from 'lucide-react'
 import { ButtonLink } from '@/components/ui/ButtonLink'
 import { Card, CardHeader } from '@/components/ui/Card'
 import { SkeletonText } from '@/components/ui/Skeleton'
-import { StatusBadge } from '@/components/ui/StatusBadge'
+import { InlineAlert } from '@/components/ui/InlineAlert'
 import { mobilePath } from '@/layouts/mobile/mobileNav'
 import { MobileFact, MobileFacts, MobilePageHeader, MobilePanel } from '@/layouts/mobile/MobilePage'
 import { formatMoney } from '@/lib/money'
 import type { Sale } from '@/types/domain'
 
 import { SaleGate } from '../components/SaleGate'
+import { SaleStatusBadges } from '../components/SaleStatus'
 import { Lines, PaymentCard, Totals } from '../components/SaleSections'
-import { formatSaleTime, itemsLabel, SALE_STATUS_LABELS } from '../labels'
+import { formatSaleTime, itemsLabel } from '../labels'
 
 const BILLS = mobilePath('bills')
 const back = { to: BILLS, label: 'Bills' }
@@ -25,7 +26,6 @@ function BillSkeleton() {
 }
 
 function Bill({ sale }: { sale: Sale }) {
-  const status = SALE_STATUS_LABELS[sale.status]
   const units = sale.lines.reduce((sum, line) => sum + line.quantity, 0)
   return (
     <>
@@ -40,11 +40,23 @@ function Bill({ sale }: { sale: Sale }) {
         }
       />
       <div className="grid gap-4">
+        {sale.status === 'voided' && (
+          <InlineAlert tone="danger" title="This bill was voided">
+            Voided by {sale.voided_by_name ?? 'staff'}
+            {sale.voided_at && ` on ${formatSaleTime(sale.voided_at)}`}: {sale.void_reason}. Its stock was put back, and it
+            doesn’t count as a sale.
+          </InlineAlert>
+        )}
         <MobilePanel title="Bill">
           <MobileFacts>
             <MobileFact label="Status">
-              <StatusBadge tone={status.tone}>{status.label}</StatusBadge>
+              <SaleStatusBadges status={sale.status} returnState={sale.return_state} />
             </MobileFact>
+            {sale.returns.length > 0 && (
+              <MobileFact label="Returns">
+                {sale.returns.map((r) => r.number).join(', ')} · {formatMoney(sale.refunded_paise)} refunded
+              </MobileFact>
+            )}
             <MobileFact label="Date & time">{formatSaleTime(sale.created_at)}</MobileFact>
             <MobileFact label="Cashier">{sale.cashier_name}</MobileFact>
             {sale.discount_approved_by_name && <MobileFact label="Discount approved by">{sale.discount_approved_by_name}</MobileFact>}

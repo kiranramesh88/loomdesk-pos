@@ -29,6 +29,13 @@ export function Receipt({ sale }: { sale: Sale }) {
           </p>
           {store.gstin && <p className="text-ink-3">GSTIN {store.gstin}</p>}
           <p className="mt-3 type-eyebrow">Tax invoice</p>
+          {sale.status === 'voided' && (
+            // A reprint of a voided bill must never pass for a valid one.
+            <p className="mt-2 rounded-sm border border-danger px-2 py-1 font-bold text-danger print:text-ink">
+              VOIDED{sale.voided_by_name ? ` by ${sale.voided_by_name}` : ''}
+              {sale.voided_at ? ` · ${formatSaleTime(sale.voided_at)}` : ''}
+            </p>
+          )}
         </header>
 
         <Divider />

@@ -1,7 +1,7 @@
 import uuid
 
 from django.db import transaction
-from django.db.models import Count, Exists, OuterRef, Prefetch, Q, Sum
+from django.db.models import Count, Exists, F, IntegerField, OuterRef, Prefetch, Q, Subquery, Sum
 from django.db.models.functions import Coalesce, TruncDate
 from django.shortcuts import get_object_or_404
 from django.utils.decorators import method_decorator
@@ -16,6 +16,7 @@ from rest_framework.views import APIView
 from apps.accounts.models import Role, User
 from apps.accounts.permissions import IsAdmin, IsStaffMember
 from apps.catalog.models import Category, Product, Variant
+from apps.returns.models import ReturnLine
 from apps.store.models import StoreSettings
 
 from . import services
@@ -30,9 +31,11 @@ from .serializers import (
     QuoteSerializer,
     SaleCashierSerializer,
     SaleListItemSerializer,
+    RETURN_STATES,
     SaleSerializer,
     SalesSummarySerializer,
     SellableProductSerializer,
+    VoidSerializer,
 )
 
 
@@ -153,7 +156,19 @@ IDEMPOTENCY_HEADER = OpenApiParameter(
 
 
 def sale_queryset():
-    return Sale.objects.select_related("payment").prefetch_related("lines")
+    return Sale.objects.select_related("payment").prefetch_related("lines__return_lines", "returns")
+
+
+def returned_units():
+    """Units of a sale already returned, as a subquery (a join would multiply the line sums)."""
+    units = (
+        ReturnLine.objects.filter(sale_line__sale=OuterRef("pk"))
+        .order_by()
+        .values("sale_line__sale")
+        .annotate(units=Sum("quantity"))
+        .values("units")
+    )
+    return Coalesce(Subquery(units, output_field=IntegerField()), 0)
 
 
 def visible_sales(user, queryset=None):
@@ -169,6 +184,15 @@ class SaleFilter(filters.FilterSet):
     cashier = filters.NumberFilter(field_name="cashier_id")
     method = filters.ChoiceFilter(field_name="payment__method", choices=Payment.Method.choices)
     status = filters.ChoiceFilter(choices=Sale.Status.choices)
+    return_state = filters.ChoiceFilter(method="by_return_state", choices=[(s, s) for s in RETURN_STATES])
+
+    def by_return_state(self, queryset, name, value):
+        queryset = queryset.annotate(_sold=Sum("lines__quantity"), _returned=returned_units())
+        if value == "none":
+            return queryset.filter(_returned=0)
+        if value == "partial":
+            return queryset.filter(_returned__gt=0, _returned__lt=F("_sold"))
+        return queryset.filter(_returned__gt=0, _returned__gte=F("_sold"))
 
     def search(self, queryset, name, value):
         value = value.strip()
@@ -197,7 +221,12 @@ class SaleListCreateView(generics.ListAPIView):
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False):  # schema generation has no signed-in user
             return Sale.objects.none()
-        return visible_sales(self.request.user).select_related("payment").annotate(item_count=Sum("lines__quantity")).order_by("-created_at", "-id")
+        return (
+            visible_sales(self.request.user)
+            .select_related("payment")
+            .annotate(item_count=Sum("lines__quantity"), returned_units=returned_units())
+            .order_by("-created_at", "-id")
+        )
 
     @extend_schema(
         request=CheckoutSerializer,
@@ -226,6 +255,20 @@ class SaleDetailView(APIView):
     def get(self, request, invoice_no: str):
         sale = get_object_or_404(visible_sales(request.user, sale_queryset()), invoice_no=invoice_no)
         return Response(SaleSerializer(sale).data)
+
+
+class SaleVoidView(APIView):
+    """Void today's sale made by mistake: Admin only, with a reason (decision D1, D2). The stock goes back;
+    the sale's lines, totals and payment are kept, marked voided."""
+
+    permission_classes = [IsAdmin]
+
+    @extend_schema(request=VoidSerializer, responses=SaleSerializer)
+    def post(self, request, invoice_no: str):
+        serializer = VoidSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        sale = services.void_sale(request.user, invoice_no, serializer.validated_data["reason"])
+        return Response(SaleSerializer(sale_queryset().get(pk=sale.pk)).data)
 
 
 def _group(sales, *fields):

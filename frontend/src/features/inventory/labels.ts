@@ -8,6 +8,7 @@ export const MOVEMENT_LABELS: Record<MovementType, { label: string; tone: Status
   purchase: { label: 'Purchase received', tone: 'info' },
   sale: { label: 'Sale', tone: 'info' },
   return: { label: 'Customer return', tone: 'info' },
+  void: { label: 'Sale voided', tone: 'neutral' },
   adjust_add: { label: 'Adjustment (add)', tone: 'success' },
   adjust_remove: { label: 'Adjustment (remove)', tone: 'warning' },
   count: { label: 'Stock count', tone: 'neutral' },
@@ -62,11 +63,12 @@ const when = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', 
 export const formatWhen = (iso: string) => when.format(new Date(iso))
 
 /**
- * Where a movement's reference leads: sales to their transaction, purchase receipts to their purchase.
- * `mobile` keeps the reader inside the mobile admin.
+ * Where a movement's reference leads: sales and voids to their transaction, purchase receipts to their
+ * purchase, customer returns to their return. `mobile` keeps the reader inside the mobile admin.
  */
 export function referencePath(reference: string, mobile = false): string | null {
   if (/^LD-\d+$/.test(reference)) return mobile ? `/admin/mobile/bills/${reference}` : `/admin/transactions/${reference}`
+  if (/^RET-\d+$/.test(reference)) return mobile ? `/admin/mobile/returns/${reference}` : `/admin/returns/${reference}`
   if (/^PUR-\d+$/.test(reference)) return mobile ? `/admin/mobile/purchases/${reference}` : `/admin/suppliers/purchases/${reference}`
   return null
 }

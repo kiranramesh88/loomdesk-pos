@@ -8,11 +8,14 @@ from decimal import Decimal
 from datetime import timedelta
 
 from django.db import IntegrityError, transaction
+from django.utils import timezone
 from rest_framework import status
-from rest_framework.exceptions import APIException, ValidationError
+from rest_framework.exceptions import APIException, NotFound, ValidationError
 
 from apps.accounts import attempts
 from apps.accounts.models import Role, User
+from apps.audit import services as audit
+from apps.audit.models import AuditEntry
 from apps.catalog.models import Product, Variant
 from apps.inventory.models import StockMovement
 from apps.inventory.services import StockError, record_movement
@@ -37,6 +40,14 @@ class TotalChanged(Conflict):
 
 class IdempotencyMismatch(Conflict):
     default_code = "idempotency_key_reused"
+
+
+class AlreadyVoided(Conflict):
+    default_code = "already_voided"
+
+
+class VoidNotAllowed(Conflict):
+    default_code = "void_not_allowed"
 
 
 def _variants(ids: list[int], *, lock: bool) -> dict[int, Variant]:
@@ -289,4 +300,51 @@ def _write_sale(user: User, data: dict, key, fingerprint: str, approver: User | 
         except StockError as error:
             # Only reachable if stock moved between the lock and here; the whole sale rolls back.
             raise ValidationError({"lines": [{} if i != index else {"quantity": [str(error)]} for i in range(len(bill.lines))]})
+    return sale
+
+
+def void_sale(user: User, invoice_no: str, reason: str) -> Sale:
+    """Cancel a sale made today by mistake (decision D2) and put its stock back.
+
+    The sale row is locked first, so a void and a return of the same bill can't both go through, and a
+    repeated void finds the sale already voided (409) instead of restocking twice. Lines, totals and the
+    payment are kept as they were; only the status and the `voided_*` fields change. A bill from an
+    earlier day, or one with returns, goes through a return instead.
+    """
+    with transaction.atomic():
+        sale = Sale.objects.select_for_update().filter(invoice_no=invoice_no).first()
+        if sale is None:
+            raise NotFound("No sale has that invoice number.")
+        if sale.status == Sale.Status.VOIDED:
+            raise AlreadyVoided(f"{sale.invoice_no} was already voided by {sale.voided_by_name}.")
+        if sale.returns.exists():
+            raise VoidNotAllowed(f"{sale.invoice_no} has returns, so it can’t be voided. Record a return for the rest instead.")
+        if timezone.localdate(sale.created_at) != timezone.localdate():
+            raise VoidNotAllowed(f"Only today’s bills can be voided. Record a return for {sale.invoice_no} instead.")
+        sale.status = Sale.Status.VOIDED
+        sale.voided_at = timezone.now()
+        sale.voided_by = user
+        sale.voided_by_name = user.full_name
+        sale.void_reason = reason
+        sale.save(update_fields=["status", "voided_at", "voided_by", "voided_by_name", "void_reason"])
+        lines = list(sale.lines.select_related("variant"))
+        # Variant rows lock in id order, like checkout's, so concurrent stock changes can't deadlock.
+        for line in sorted(lines, key=lambda line: line.variant_id):
+            record_movement(
+                variant=line.variant,
+                type=StockMovement.Type.VOID,
+                quantity_delta=line.quantity,
+                actor=user,
+                reference=sale.invoice_no,
+                reason=reason,
+            )
+        audit.record(
+            user,
+            AuditEntry.Action.SALE_VOID,
+            sale.invoice_no,
+            f"Voided {sale.invoice_no} (₹{sale.total_paise / 100:,.2f}): {reason}",
+            reason=reason,
+            total_paise=sale.total_paise,
+            restocked_units=sum(line.quantity for line in lines),
+        )
     return sale

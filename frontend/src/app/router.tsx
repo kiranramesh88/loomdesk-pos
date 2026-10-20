@@ -12,6 +12,7 @@ import { productRoutes } from '@/features/products/routes'
 import { transactionRoutes } from '@/features/transactions/routes'
 import { inventoryRoutes } from '@/features/inventory/routes'
 import { supplierRoutes } from '@/features/suppliers/routes'
+import { returnRoutes } from '@/features/returns/routes'
 import { mobileRoutes } from '@/layouts/mobile/mobileRoutes'
 import { ALL_ROLES } from '@/types/domain'
 
@@ -40,6 +41,7 @@ const MODULE_ROUTES: Partial<Record<string, RouteObject[]>> = {
   transactions: transactionRoutes,
   inventory: inventoryRoutes,
   suppliers: supplierRoutes,
+  returns: returnRoutes,
 }
 
 // One route per nav item, so titles, active links and nested paths come from the same config.

@@ -55,6 +55,8 @@ INSTALLED_APPS = [
     "apps.customers",
     "apps.suppliers",
     "apps.sales",
+    "apps.returns",
+    "apps.audit",
 ]
 
 MIDDLEWARE = [
@@ -177,6 +179,9 @@ SPECTACULAR_SETTINGS = {
         "StockStateEnum": "apps.catalog.serializers.STOCK_STATES",
         "PaymentMethodEnum": "apps.sales.models.Payment.Method",
         "SaleStatusEnum": "apps.sales.models.Sale.Status",
+        "ReturnDispositionEnum": "apps.returns.models.ReturnLine.Disposition",
+        "ReturnReasonEnum": "apps.returns.models.Return.Reason",
+        "ReturnStateEnum": "apps.sales.serializers.RETURN_STATES",
         "PurchaseStatusEnum": "apps.suppliers.models.Purchase.Status",
         "SupplierPaymentMethodEnum": "apps.suppliers.models.SupplierPayment.Method",
         "DiscountKindEnum": "apps.sales.serializers.DISCOUNT_KINDS",

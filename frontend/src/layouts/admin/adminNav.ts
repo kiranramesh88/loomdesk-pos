@@ -34,7 +34,7 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
   { path: 'products', label: 'Products', description: 'Catalogue, variants, prices and photos.', icon: Tag, group: 'workspace', phase: 3 },
   { path: 'inventory', label: 'Inventory', description: 'Stock levels, adjustments and movement history.', icon: Boxes, group: 'workspace', phase: 6 },
   { path: 'transactions', label: 'Transactions', description: 'Completed bills, payments and receipt reprints.', icon: ReceiptText, group: 'workspace', phase: 5 },
-  { path: 'returns', label: 'Returns', description: 'Returned items, refunds and restocking.', icon: ArrowLeftRight, group: 'workspace' },
+  { path: 'returns', label: 'Returns', description: 'Returned items, refunds and restocking.', icon: ArrowLeftRight, group: 'workspace', phase: 11 },
   { path: 'suppliers', label: 'Suppliers', description: 'Supplier profiles, purchases and payments.', icon: Truck, group: 'workspace', phase: 7 },
   { path: 'staff', label: 'Staff & access', description: 'Staff accounts, roles and approval PINs.', icon: Users, group: 'workspace' },
   { path: 'reports', label: 'Reports', description: 'Sales, tax and stock reports with CSV export.', icon: ChartColumn, group: 'workspace' },

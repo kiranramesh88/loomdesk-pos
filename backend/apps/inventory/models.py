@@ -10,6 +10,7 @@ class StockMovement(models.Model):
         PURCHASE = "purchase", "Purchase received"
         SALE = "sale", "Sale"
         RETURN = "return", "Customer return"
+        VOID = "void", "Sale voided"
         ADJUST_ADD = "adjust_add", "Adjustment (add)"
         ADJUST_REMOVE = "adjust_remove", "Adjustment (remove)"
         COUNT = "count", "Stock count"

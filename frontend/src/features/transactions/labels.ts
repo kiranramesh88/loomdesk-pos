@@ -1,10 +1,17 @@
 import type { StatusTone } from '@/components/ui/StatusBadge'
-import type { PaymentMethod, SaleStatus } from '@/types/domain'
+import type { PaymentMethod, ReturnState, SaleStatus } from '@/types/domain'
 
 export { formatSaleTime, PAYMENT_LABELS } from '@/features/billing/receipt'
 
 export const SALE_STATUS_LABELS: Record<SaleStatus, { label: string; tone: StatusTone }> = {
   completed: { label: 'Completed', tone: 'success' },
+  voided: { label: 'Voided', tone: 'danger' },
+}
+
+/** Derived from the sale's returns; the sale itself never changes. `none` shows no badge. */
+export const RETURN_STATE_LABELS: Record<Exclude<ReturnState, 'none'>, { label: string; tone: StatusTone }> = {
+  partial: { label: 'Partly returned', tone: 'neutral' },
+  returned: { label: 'Returned', tone: 'neutral' },
 }
 
 export const itemsLabel = (count: number) => `${count.toLocaleString('en-IN')} ${count === 1 ? 'item' : 'items'}`
@@ -24,3 +31,8 @@ export function formatStoreDate(date: string) {
   const value = new Date(y, m - 1, d)
   return `${weekday.format(value)}, ${day.format(value)}`
 }
+
+const storeDay = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' })
+
+/** The store date (YYYY-MM-DD, Asia/Kolkata like the server) a timestamp falls on, to compare with `store.today`. */
+export const storeDateOf = (iso: string) => storeDay.format(new Date(iso))

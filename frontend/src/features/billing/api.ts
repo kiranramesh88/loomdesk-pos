@@ -135,7 +135,7 @@ export function useSale(invoiceNo: string) {
   return useQuery({
     queryKey: queryKeys.sales.detail(invoiceNo),
     queryFn: ({ signal }) => apiFetch<Sale>(`/sales/${encodeURIComponent(invoiceNo)}/`, { signal }),
-    // A saved sale never changes.
+    // A saved sale changes only when it's voided or goods come back; both invalidate it.
     staleTime: Infinity,
     retry: retryTransient,
   })

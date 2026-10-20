@@ -8,6 +8,7 @@ from .views import (
     SaleCashierListView,
     SaleDetailView,
     SaleListCreateView,
+    SaleVoidView,
     SalesSummaryView,
     SellableProductListView,
 )
@@ -25,4 +26,5 @@ sales_urlpatterns = [
     path("summary/", SalesSummaryView.as_view(), name="sale-summary"),
     path("cashiers/", SaleCashierListView.as_view(), name="sale-cashiers"),
     path("<str:invoice_no>/", SaleDetailView.as_view(), name="sale-detail"),
+    path("<str:invoice_no>/void/", SaleVoidView.as_view(), name="sale-void"),
 ]

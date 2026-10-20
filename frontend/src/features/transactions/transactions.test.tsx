@@ -19,6 +19,7 @@ const ROW = {
   total_paise: 605790,
   payment_method: 'upi',
   gateway_verified: false,
+  return_state: 'none',
 }
 const CASH_ROW = { ...ROW, invoice_no: 'LD-000041', item_count: 1, total_paise: 125895, payment_method: 'cash' }
 
@@ -66,6 +67,13 @@ const SALE = {
   tax_paise: 85990,
   total_paise: 605790,
   discount_approved_by_name: 'Rahul Krishnan',
+  voided_at: null,
+  voided_by_name: null,
+  void_reason: '',
+  return_state: 'none',
+  returned_units: 0,
+  refunded_paise: 0,
+  returns: [],
   lines: [
     {
       id: 1, variant: 31, product_name: 'Classic Cotton Shirt', product_sku: 'SH-CT-001', variant_sku: 'SH-CT-001-M-BLU', size: 'M',
@@ -85,7 +93,7 @@ const SALE = {
   payment: { method: 'upi', amount_paise: 605790, tendered_paise: null, change_paise: 0, reference: 'UTR998877', gateway_verified: false, recorded_at: '2026-10-20T10:30:00Z' },
 }
 
-type Call = { method: string; url: URL }
+type Call = { method: string; url: URL; body?: unknown }
 type Handler = (url: URL, method: string) => Response | undefined
 
 function mockApi({ me = ME_ADMIN as unknown, handler = (() => undefined) as Handler } = {}) {
@@ -94,7 +102,7 @@ function mockApi({ me = ME_ADMIN as unknown, handler = (() => undefined) as Hand
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
     const url = new URL(String(input), 'http://localhost')
     const method = init?.method ?? 'GET'
-    calls.push({ method, url })
+    calls.push({ method, url, body: typeof init?.body === 'string' ? JSON.parse(init.body) : undefined })
     const custom = handler(url, method)
     if (custom) return custom
     const path = url.pathname
@@ -232,8 +240,8 @@ describe('transactions list', () => {
   })
 
   it('ignores filter values the API would reject', () => {
-    expect(readParams(new URLSearchParams('from=yesterday&to=2026-13-45&cashier=abc&method=cheque&page=-2'))).toEqual({
-      q: '', from: '', to: '', cashier: '', method: '', page: 1,
+    expect(readParams(new URLSearchParams('from=yesterday&to=2026-13-45&cashier=abc&method=cheque&status=refunded&page=-2'))).toEqual({
+      q: '', from: '', to: '', cashier: '', method: '', status: '', page: 1,
     })
   })
 
@@ -415,5 +423,68 @@ describe('receipt reprint', () => {
     renderRoutes(routes, '/admin/transactions/LD-000999/receipt')
     expect(await screen.findByText('No transaction with that invoice number')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Print receipt' })).not.toBeInTheDocument()
+  })
+})
+
+describe('voids and returns on the transaction page', () => {
+  const store = (today: string) => (url: URL) =>
+    url.pathname.endsWith('/store/') ? jsonResponse(200, { name: 'Loom & Linen', code: 'LL', state: 'Kerala', today }) : undefined
+
+  it('voids today’s bill only with a reason, then shows it as voided', async () => {
+    wideScreen()
+    let voided = false
+    const calls = mockApi({
+      handler: (url, method) => {
+        if (url.pathname.endsWith('/sales/LD-000042/void/') && method === 'POST') {
+          voided = true
+          return jsonResponse(200, { ...SALE, status: 'voided' })
+        }
+        if (url.pathname.endsWith('/sales/LD-000042/') && voided) {
+          return jsonResponse(200, {
+            ...SALE, status: 'voided', voided_at: '2026-10-20T11:00:00Z', voided_by_name: 'Kiran Ramesh', void_reason: 'Rang up twice',
+          })
+        }
+        return store('2026-10-20')(url)
+      },
+    })
+    renderRoutes(routes, '/admin/transactions/LD-000042')
+    await userEvent.click(await screen.findByRole('button', { name: 'Void bill' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Void LD-000042?' })
+    expect(within(dialog).getByText(/go back into stock/)).toBeInTheDocument()
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Void bill' }))
+    expect(within(dialog).getByText('A reason is required.')).toBeInTheDocument()
+    expect(calls.some((c) => c.url.pathname.endsWith('/void/'))).toBe(false)
+
+    await userEvent.type(within(dialog).getByRole('textbox', { name: 'Reason for voiding' }), 'Rang up twice')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Void bill' }))
+    expect(await screen.findByText('This bill was voided')).toBeInTheDocument()
+    expect(calls.filter((c) => c.url.pathname.endsWith('/void/')).map((c) => c.body)).toEqual([{ reason: 'Rang up twice' }])
+    expect(screen.getByText(/Rang up twice/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Void bill' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Return items' })).not.toBeInTheDocument()
+  })
+
+  it('offers a return, not a void, for an earlier day’s bill, and lists its returns', async () => {
+    wideScreen()
+    mockApi({
+      handler: (url) =>
+        url.pathname.endsWith('/sales/LD-000042/')
+          ? jsonResponse(200, {
+              ...SALE,
+              return_state: 'partial',
+              returned_units: 1,
+              refunded_paise: 122786,
+              returns: [{ number: 'RET-000004', created_at: '2026-10-21T09:00:00Z', total_paise: 122786 }],
+            })
+          : store('2026-10-22')(url),
+    })
+    renderRoutes(routes, '/admin/transactions/LD-000042')
+    const returnLink = await screen.findByRole('link', { name: 'Return items' })
+    expect(returnLink).toHaveAttribute('href', '/admin/returns/new?invoice=LD-000042')
+    expect(screen.queryByRole('button', { name: 'Void bill' })).not.toBeInTheDocument()
+    expect(screen.getByText('Partly returned')).toBeInTheDocument()
+    const returns = screen.getByRole('region', { name: 'Returns' })
+    expect(within(returns).getByRole('link', { name: 'RET-000004' })).toHaveAttribute('href', '/admin/returns/RET-000004')
+    expect(within(returns).getByText('1 of 3 units returned · ₹1,227.86 refunded')).toBeInTheDocument()
   })
 })

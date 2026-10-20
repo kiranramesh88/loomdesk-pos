@@ -122,6 +122,7 @@ def test_list_row_has_the_saved_figures(shirt, jacket, admin, cashier):
         "total_paise": 6057_90,
         "payment_method": "upi",
         "gateway_verified": False,
+        "return_state": "none",
     }
 
 

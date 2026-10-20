@@ -332,6 +332,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/returns/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description GET: returns, newest first. POST: record a return and its refund. Admin only (decision D1). */
+        get: operations["returns_list"];
+        put?: never;
+        /** @description Record a return. 201 when written; 200 when the same Idempotency-Key was already used for it. */
+        post: operations["returns_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/returns/{number}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["returns_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/returns/invoice/{invoice_no}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description A sale's lines with sold, already returned and still returnable quantities. */
+        get: operations["returns_invoice_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/returns/quote/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Work out a return's refund without saving anything, for the review step. */
+        post: operations["returns_quote_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/": {
         parameters: {
             query?: never;
@@ -365,6 +433,26 @@ export interface paths {
         get: operations["sales_retrieve"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/{invoice_no}/void/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Void today's sale made by mistake: Admin only, with a reason (decision D1, D2). The stock goes back;
+         *     the sale's lines, totals and payment are kept, marked voided.
+         */
+        post: operations["sales_void_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -852,6 +940,21 @@ export interface components {
             previous?: string | null;
             results: components["schemas"]["PurchaseListItem"][];
         };
+        PaginatedReturnListItemList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["ReturnListItem"][];
+        };
         PaginatedSaleListItemList: {
             /** @example 123 */
             count: number;
@@ -1164,6 +1267,164 @@ export interface components {
             tax_paise: number;
             total_paise: number;
         };
+        QuotedLine: {
+            subtotal_paise: number;
+            discount_paise: number;
+            taxable_paise: number;
+            tax_paise: number;
+            total_paise: number;
+            sale_line: number;
+            quantity: number;
+            disposition: components["schemas"]["ReturnDispositionEnum"];
+        };
+        Refund: {
+            readonly method: components["schemas"]["PaymentMethodEnum"];
+            readonly amount_paise: number;
+            readonly reference: string;
+            readonly gateway_verified: boolean;
+            /** Format: date-time */
+            readonly recorded_at: string;
+            readonly recorded_by_name: string;
+        };
+        RefundFigures: {
+            subtotal_paise: number;
+            discount_paise: number;
+            taxable_paise: number;
+            tax_paise: number;
+            total_paise: number;
+        };
+        RefundInputRequest: {
+            method: components["schemas"]["PaymentMethodEnum"];
+            reference?: string;
+        };
+        Return: {
+            readonly number: string;
+            /** Format: date-time */
+            readonly created_at: string;
+            readonly created_by_name: string;
+            readonly invoice_no: string;
+            /** Format: date-time */
+            readonly sale_created_at: string;
+            readonly reason: components["schemas"]["ReturnReasonEnum"];
+            readonly note: string;
+            readonly subtotal_paise: number;
+            readonly discount_paise: number;
+            readonly taxable_paise: number;
+            readonly tax_paise: number;
+            readonly total_paise: number;
+            readonly lines: components["schemas"]["ReturnLine"][];
+            readonly refund: components["schemas"]["Refund"];
+        };
+        ReturnCreateRequest: {
+            invoice_no: string;
+            reason: components["schemas"]["ReturnReasonEnum"];
+            /** @default  */
+            note: string;
+            lines: components["schemas"]["ReturnLineInputRequest"][];
+            refund: components["schemas"]["RefundInputRequest"];
+            expected_total_paise: number;
+        };
+        /**
+         * @description * `sellable` - Back to stock
+         *     * `damaged` - Damaged
+         *     * `inspection` - Inspection hold
+         * @enum {string}
+         */
+        ReturnDispositionEnum: "sellable" | "damaged" | "inspection";
+        ReturnLine: {
+            readonly id: number;
+            readonly sale_line: number;
+            readonly variant: number;
+            readonly product_name: string;
+            readonly variant_sku: string;
+            readonly size: string;
+            readonly colour: string;
+            readonly sold_quantity: number;
+            readonly quantity: number;
+            readonly disposition: components["schemas"]["ReturnDispositionEnum"];
+            readonly subtotal_paise: number;
+            readonly discount_paise: number;
+            readonly taxable_paise: number;
+            readonly tax_paise: number;
+            readonly total_paise: number;
+        };
+        ReturnLineInputRequest: {
+            sale_line: number;
+            quantity: number;
+            disposition: components["schemas"]["ReturnDispositionEnum"];
+        };
+        ReturnListItem: {
+            readonly number: string;
+            /** Format: date-time */
+            readonly created_at: string;
+            readonly invoice_no: string;
+            readonly reason: components["schemas"]["ReturnReasonEnum"];
+            readonly units: number;
+            readonly total_paise: number;
+            readonly refund_method: components["schemas"]["PaymentMethodEnum"];
+            readonly dispositions: components["schemas"]["ReturnDispositionEnum"][];
+            readonly created_by_name: string;
+        };
+        ReturnQuote: {
+            invoice_no: string;
+            lines: components["schemas"]["QuotedLine"][];
+            totals: components["schemas"]["RefundFigures"];
+        };
+        /**
+         * @description * `size_fit` - Size or fit
+         *     * `defect` - Damaged or defective
+         *     * `not_as_expected` - Not as expected
+         *     * `wrong_item` - Wrong item
+         *     * `other` - Other
+         * @enum {string}
+         */
+        ReturnReasonEnum: "size_fit" | "defect" | "not_as_expected" | "wrong_item" | "other";
+        ReturnRequestRequest: {
+            invoice_no: string;
+            reason: components["schemas"]["ReturnReasonEnum"];
+            /** @default  */
+            note: string;
+            lines: components["schemas"]["ReturnLineInputRequest"][];
+            refund: components["schemas"]["RefundInputRequest"];
+        };
+        /**
+         * @description * `none` - none
+         *     * `partial` - partial
+         *     * `returned` - returned
+         * @enum {string}
+         */
+        ReturnStateEnum: "none" | "partial" | "returned";
+        ReturnableLine: {
+            readonly id: number;
+            readonly product_name: string;
+            readonly variant_sku: string;
+            readonly size: string;
+            readonly colour: string;
+            readonly quantity: number;
+            readonly unit_price_paise: number;
+            readonly discount_paise: number;
+            readonly tax_rate_bp: number;
+            readonly total_paise: number;
+            readonly returned: number;
+            readonly eligible: number;
+        };
+        /** @description A sale as the return wizard needs it: what was sold, what already came back, what still can. */
+        ReturnableSale: {
+            readonly invoice_no: string;
+            readonly status: components["schemas"]["SaleStatusEnum"];
+            /** Format: date-time */
+            readonly created_at: string;
+            readonly cashier_name: string;
+            readonly total_paise: number;
+            readonly payment_method: components["schemas"]["PaymentMethodEnum"];
+            readonly refund_methods: components["schemas"]["PaymentMethodEnum"][];
+            readonly can_return: boolean;
+            readonly lines: components["schemas"]["ReturnableLine"][];
+            readonly returns: {
+                number: string;
+                total_paise: number;
+            }[];
+        };
         /**
          * @description * `admin` - Admin
          *     * `senior_cashier` - Senior cashier
@@ -1171,7 +1432,11 @@ export interface components {
          * @enum {string}
          */
         RoleEnum: "admin" | "senior_cashier" | "cashier";
-        /** @description A saved sale as its receipt shows it. Every figure comes from the stored snapshot. */
+        /**
+         * @description A saved sale as its receipt shows it. Every figure comes from the stored snapshot.
+         *
+         *     Expects `sale_queryset()`'s prefetches (lines with their return lines, and returns).
+         */
         Sale: {
             readonly invoice_no: string;
             readonly status: components["schemas"]["SaleStatusEnum"];
@@ -1195,6 +1460,14 @@ export interface components {
             readonly lines: components["schemas"]["SaleLine"][];
             readonly tax_breakdown: components["schemas"]["TaxBreakdown"][];
             readonly payment: components["schemas"]["Payment"];
+            /** Format: date-time */
+            readonly voided_at: string | null;
+            readonly voided_by_name: string | null;
+            readonly void_reason: string;
+            readonly return_state: components["schemas"]["ReturnStateEnum"];
+            readonly returned_units: number;
+            readonly refunded_paise: number;
+            readonly returns: components["schemas"]["SaleReturn"][];
         };
         SaleCashier: {
             readonly id: number;
@@ -1237,12 +1510,20 @@ export interface components {
             readonly total_paise: number;
             readonly payment_method: components["schemas"]["PaymentMethodEnum"];
             readonly gateway_verified: boolean;
+            readonly return_state: components["schemas"]["ReturnStateEnum"];
+        };
+        SaleReturn: {
+            number: string;
+            /** Format: date-time */
+            created_at: string;
+            total_paise: number;
         };
         /**
          * @description * `completed` - Completed
+         *     * `voided` - Voided
          * @enum {string}
          */
-        SaleStatusEnum: "completed";
+        SaleStatusEnum: "completed" | "voided";
         /** @description Completed sales matching the filters, summed from their saved totals (GST included, after discounts). */
         SalesSummary: {
             sale_count: number;
@@ -1338,12 +1619,13 @@ export interface components {
          *     * `purchase` - Purchase received
          *     * `sale` - Sale
          *     * `return` - Customer return
+         *     * `void` - Sale voided
          *     * `adjust_add` - Adjustment (add)
          *     * `adjust_remove` - Adjustment (remove)
          *     * `count` - Stock count
          * @enum {string}
          */
-        StockMovementTypeEnum: "opening" | "purchase" | "sale" | "return" | "adjust_add" | "adjust_remove" | "count";
+        StockMovementTypeEnum: "opening" | "purchase" | "sale" | "return" | "void" | "adjust_add" | "adjust_remove" | "count";
         /**
          * @description * `in_stock` - in_stock
          *     * `low_stock` - low_stock
@@ -1513,6 +1795,9 @@ export interface components {
             is_active: boolean;
             /** @default 0 */
             opening_stock: number;
+        };
+        VoidRequest: {
+            reason: string;
         };
     };
     responses: never;
@@ -1963,11 +2248,12 @@ export interface operations {
                  *     * `purchase` - Purchase received
                  *     * `sale` - Sale
                  *     * `return` - Customer return
+                 *     * `void` - Sale voided
                  *     * `adjust_add` - Adjustment (add)
                  *     * `adjust_remove` - Adjustment (remove)
                  *     * `count` - Stock count
                  */
-                type?: "adjust_add" | "adjust_remove" | "count" | "opening" | "purchase" | "return" | "sale";
+                type?: "adjust_add" | "adjust_remove" | "count" | "opening" | "purchase" | "return" | "sale" | "void";
                 variant?: number;
             };
             header?: never;
@@ -2075,6 +2361,151 @@ export interface operations {
             };
         };
     };
+    returns_list: {
+        parameters: {
+            query?: {
+                /** @description On or after (store time) */
+                date_from?: string;
+                /** @description On or before (store time) */
+                date_to?: string;
+                /**
+                 * @description * `sellable` - Back to stock
+                 *     * `damaged` - Damaged
+                 *     * `inspection` - Inspection hold
+                 */
+                disposition?: "damaged" | "inspection" | "sellable";
+                /**
+                 * @description * `cash` - Cash
+                 *     * `upi` - UPI
+                 *     * `card` - Card
+                 */
+                method?: "card" | "cash" | "upi";
+                /** @description A page number within the paginated result set. */
+                page?: number;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description Return or invoice number (or part of it) */
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedReturnListItemList"];
+                };
+            };
+        };
+    };
+    returns_create: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description UUID made when the review step opens. Retrying with the same key returns the original return. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReturnCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ReturnCreateRequest"];
+                "multipart/form-data": components["schemas"]["ReturnCreateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Return"];
+                };
+            };
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Return"];
+                };
+            };
+        };
+    };
+    returns_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                number: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Return"];
+                };
+            };
+        };
+    };
+    returns_invoice_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invoice_no: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReturnableSale"];
+                };
+            };
+        };
+    };
+    returns_quote_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReturnRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ReturnRequestRequest"];
+                "multipart/form-data": components["schemas"]["ReturnRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReturnQuote"];
+                };
+            };
+        };
+    };
     sales_list: {
         parameters: {
             query?: {
@@ -2095,8 +2526,17 @@ export interface operations {
                 page_size?: number;
                 /** @description Invoice number (or part of it) */
                 q?: string;
-                /** @description * `completed` - Completed */
-                status?: "completed";
+                /**
+                 * @description * `none` - none
+                 *     * `partial` - partial
+                 *     * `returned` - returned
+                 */
+                return_state?: "none" | "partial" | "returned";
+                /**
+                 * @description * `completed` - Completed
+                 *     * `voided` - Voided
+                 */
+                status?: "completed" | "voided";
             };
             header?: never;
             path?: never;
@@ -2160,6 +2600,33 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Sale"];
+                };
+            };
+        };
+    };
+    sales_void_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invoice_no: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoidRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["VoidRequest"];
+                "multipart/form-data": components["schemas"]["VoidRequest"];
+            };
+        };
         responses: {
             200: {
                 headers: {

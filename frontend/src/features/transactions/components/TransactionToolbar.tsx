@@ -6,8 +6,8 @@ import { Select, type SelectOption } from '@/components/ui/Select'
 import { TextField } from '@/components/ui/TextField'
 import type { SaleCashier } from '@/types/domain'
 
-import { formatStoreDate, PAYMENT_LABELS } from '../labels'
-import { hasFilters, METHODS, rangeIsBackwards, type TransactionParams } from '../transactionParams'
+import { formatStoreDate, PAYMENT_LABELS, RETURN_STATE_LABELS, SALE_STATUS_LABELS } from '../labels'
+import { hasFilters, METHODS, rangeIsBackwards, STATUS_FILTERS, type StatusFilter, type TransactionParams } from '../transactionParams'
 
 const ALL = 'all'
 
@@ -15,6 +15,11 @@ const METHOD_OPTIONS: SelectOption[] = [
   { value: ALL, label: 'All payment methods' },
   ...METHODS.map((m) => ({ value: m, label: PAYMENT_LABELS[m] })),
 ]
+
+const statusLabel = (status: Exclude<StatusFilter, ''>) =>
+  status === 'partial' || status === 'returned' ? RETURN_STATE_LABELS[status].label : SALE_STATUS_LABELS[status].label
+
+const STATUS_OPTIONS: SelectOption[] = [{ value: ALL, label: 'All statuses' }, ...STATUS_FILTERS.map((s) => ({ value: s, label: statusLabel(s) }))]
 
 interface TransactionToolbarProps {
   params: TransactionParams
@@ -67,7 +72,7 @@ export function TransactionToolbar({ params, cashiers, onChange, onClear }: Tran
   return (
     <div className="flex flex-col gap-3 px-4 py-4 sm:px-5">
       {/* Phones: search on its own row, then the filters two by two. */}
-      <div className="grid grid-cols-2 items-start gap-3 lg:grid-cols-[minmax(200px,1fr)_repeat(2,minmax(0,165px))_repeat(2,minmax(0,200px))]">
+      <div className="grid grid-cols-2 items-start gap-3 lg:grid-cols-[minmax(180px,1fr)_repeat(2,minmax(0,150px))_repeat(3,minmax(0,170px))]">
         <SearchInput
           label="Search transactions"
           placeholder="Search invoice number…"
@@ -111,6 +116,14 @@ export function TransactionToolbar({ params, cashiers, onChange, onClear }: Tran
           value={params.method || ALL}
           onValueChange={(v) => onChange({ method: fromSelect(v) as TransactionParams['method'] })}
         />
+        <Select
+          label="Status"
+          hideLabel
+          className="col-span-2 lg:col-span-1"
+          options={STATUS_OPTIONS}
+          value={params.status || ALL}
+          onValueChange={(v) => onChange({ status: fromSelect(v) as StatusFilter })}
+        />
       </div>
       {hasFilters(params) && <ActiveFilters params={params} cashiers={cashiers} onClear={clear} />}
     </div>
@@ -129,6 +142,7 @@ function ActiveFilters({ params, cashiers, onClear }: Pick<TransactionToolbarPro
     range,
     params.cashier && (cashiers?.find((c) => String(c.id) === params.cashier)?.full_name ?? 'Selected cashier'),
     params.method && PAYMENT_LABELS[params.method],
+    params.status && statusLabel(params.status),
   ].filter(Boolean)
   return (
     <div className="flex flex-wrap items-center gap-2">

@@ -41,7 +41,7 @@ function TodayFigures() {
   const store = useStore()
   const today = store.data?.today ?? ''
   // Store dates, from the server: the phone's own date can differ from the shop's.
-  const sales = useSalesSummary({ q: '', from: today, to: today, cashier: '', method: '', page: 1 }, { enabled: !!today })
+  const sales = useSalesSummary({ q: '', from: today, to: today, cashier: '', method: '', status: '', page: 1 }, { enabled: !!today })
   const stock = useInventorySummary()
   const salesLoading = !today ? store.isPending : sales.isPending
   const salesFailed = store.isError || sales.isError

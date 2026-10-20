@@ -75,6 +75,13 @@ const SALE = {
   tax_paise: 5995,
   total_paise: 125895,
   discount_approved_by_name: null,
+  voided_at: null,
+  voided_by_name: null,
+  void_reason: '',
+  return_state: 'none',
+  returned_units: 0,
+  refunded_paise: 0,
+  returns: [],
   lines: [
     {
       id: 1, variant: 31, product_name: 'Classic Cotton Shirt', product_sku: 'SH-CT-001', variant_sku: 'SH-CT-001-M-BLU', size: 'M',

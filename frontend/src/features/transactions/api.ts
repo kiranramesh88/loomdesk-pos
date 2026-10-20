@@ -1,8 +1,9 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
 
 import { ApiError, apiFetch } from '@/lib/http'
 import { queryKeys } from '@/lib/queryKeys'
-import type { SaleCashier, SalePage, SalesSummary } from '@/types/domain'
+import { useRefreshAfterReturn } from '@/features/returns/api'
+import type { Sale, SaleCashier, SalePage, SalesSummary } from '@/types/domain'
 
 import { filterQuery, listQuery, rangeIsBackwards, type TransactionParams } from './transactionParams'
 
@@ -57,6 +58,22 @@ export function useSaleCashiers() {
     queryFn: ({ signal }) => apiFetch<SaleCashier[]>('/sales/cashiers/', { signal }),
     staleTime: 5 * 60_000,
     retry: retryTransient,
+  })
+}
+
+/**
+ * Void today's bill made by mistake (Admin only; the server checks the role, the day and that nothing was
+ * returned). Stock goes back, so everything a return refreshes refreshes too. Never optimistic; a 409 means
+ * someone else voided it or recorded a return first, so the current state is fetched.
+ */
+export function useVoidSale(invoiceNo: string) {
+  const refresh = useRefreshAfterReturn()
+  return useMutation({
+    mutationFn: (reason: string) => apiFetch<Sale>(`/sales/${encodeURIComponent(invoiceNo)}/void/`, { method: 'POST', body: { reason } }),
+    onSuccess: refresh,
+    onError: (error) => {
+      if (error instanceof ApiError && error.status === 409) refresh()
+    },
   })
 }
 

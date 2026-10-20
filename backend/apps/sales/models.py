@@ -12,10 +12,16 @@ class InvoiceCounter(models.Model):
 
 class Sale(models.Model):
     """A completed bill. Never edited after it's written: every figure a receipt shows is stored
-    here or on its lines, so later catalogue or store changes can't alter it (CLAUDE.md, immutable sales)."""
+    here or on its lines, so later catalogue or store changes can't alter it (CLAUDE.md, immutable sales).
+
+    The one change allowed is a void (`services.void_sale`): it sets the status and the `voided_*` fields
+    and puts the stock back. Lines, totals and the payment stay exactly as they were. Returns never touch
+    the sale; its return state is derived from `apps.returns`.
+    """
 
     class Status(models.TextChoices):
         COMPLETED = "completed", "Completed"
+        VOIDED = "voided", "Voided"
 
     invoice_no = models.CharField(max_length=20, unique=True)
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.COMPLETED)
@@ -46,6 +52,11 @@ class Sale(models.Model):
     store_address = models.TextField()
     store_state = models.CharField(max_length=60)
     store_gstin = models.CharField(max_length=15, blank=True)
+
+    voided_at = models.DateTimeField(null=True, blank=True)
+    voided_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    voided_by_name = models.CharField(max_length=120, blank=True)
+    void_reason = models.CharField(max_length=200, blank=True)
 
     class Meta:
         ordering = ["-created_at", "-id"]

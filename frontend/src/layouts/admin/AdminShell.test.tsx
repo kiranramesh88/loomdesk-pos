@@ -68,12 +68,12 @@ describe('access', () => {
 describe('navigation, titles and nested routes', () => {
   it('highlights the section of a nested route and titles the page from the same config', async () => {
     mockApi()
-    renderRoutes(routes, '/admin/returns/12')
+    renderRoutes(routes, '/admin/reports/12')
     const nav = await adminNav()
-    expect(await screen.findByRole('heading', { level: 1, name: 'Returns' })).toBeInTheDocument()
-    expect(within(nav).getByRole('link', { name: 'Returns' })).toHaveAttribute('aria-current', 'page')
+    expect(await screen.findByRole('heading', { level: 1, name: 'Reports' })).toBeInTheDocument()
+    expect(within(nav).getByRole('link', { name: 'Reports' })).toHaveAttribute('aria-current', 'page')
     expect(within(nav).getByRole('link', { name: 'Overview' })).not.toHaveAttribute('aria-current')
-    expect(document.title).toBe('Returns · LoomDesk')
+    expect(document.title).toBe('Reports · LoomDesk')
     // Exactly one h1: the topbar's section name is plain text.
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
   })
@@ -100,9 +100,9 @@ describe('navigation, titles and nested routes', () => {
 
   it('shows an unbuilt module as a heading plus an empty state, with no fake actions', async () => {
     mockApi()
-    renderRoutes(routes, '/admin/returns')
-    await screen.findByRole('heading', { level: 1, name: 'Returns' })
-    expect(screen.getByText('Returns isn’t available yet')).toBeInTheDocument()
+    renderRoutes(routes, '/admin/reports')
+    await screen.findByRole('heading', { level: 1, name: 'Reports' })
+    expect(screen.getByText('Reports isn’t available yet')).toBeInTheDocument()
     expect(within(screen.getByRole('main')).queryByRole('button')).not.toBeInTheDocument()
   })
 
@@ -209,10 +209,10 @@ describe('phone navigation drawer', () => {
     const { router } = renderRoutes(routes, '/admin')
     await screen.findByRole('heading', { level: 1, name: 'Overview' })
     const { drawer, trigger } = await openDrawer()
-    await userEvent.click(within(drawer).getByRole('link', { name: 'Returns' }))
+    await userEvent.click(within(drawer).getByRole('link', { name: 'Reports' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
-    expect(router.state.location.pathname).toBe('/admin/returns')
-    expect(await screen.findByRole('heading', { level: 1, name: 'Returns' })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/admin/reports')
+    expect(await screen.findByRole('heading', { level: 1, name: 'Reports' })).toBeInTheDocument()
     expect(trigger).toHaveFocus()
   })
 
