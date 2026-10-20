@@ -9,6 +9,8 @@ export const queryKeys = {
   },
   store: {
     detail: ['store'] as const,
+    /** The editable store settings (admin Settings page). */
+    settings: ['store', 'settings'] as const,
   },
   products: {
     all: ['products'] as const,

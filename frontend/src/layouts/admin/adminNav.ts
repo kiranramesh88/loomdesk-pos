@@ -38,7 +38,7 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
   { path: 'suppliers', label: 'Suppliers', description: 'Supplier profiles, purchases and payments.', icon: Truck, group: 'workspace', phase: 7 },
   { path: 'staff', label: 'Staff & access', description: 'Staff accounts, roles and approval PINs.', icon: Users, group: 'workspace', phase: 11 },
   { path: 'reports', label: 'Reports', description: 'Sales, tax and stock reports with CSV export.', icon: ChartColumn, group: 'workspace' },
-  { path: 'settings', label: 'Settings', description: 'Store details, tax and discount rules.', icon: Settings, group: 'setup' },
+  { path: 'settings', label: 'Settings', description: 'Store details, tax and discount rules.', icon: Settings, group: 'setup', phase: 11 },
 ]
 
 export const ADMIN_NAV_GROUPS: ReadonlyArray<{ id: AdminNavGroup; label: string }> = [

@@ -101,3 +101,6 @@ export type StaffCreated = Schemas['StaffCreated']
 export type SetupLink = Schemas['SetupLink']
 export type SetPasswordLink = Schemas['SetPasswordLink']
 export type SetPasswordRequest = Schemas['SetPasswordRequest']
+
+export type StoreSettings = Schemas['StoreSettings']
+export type StoreSettingsUpdate = Schemas['PatchedStoreSettingsUpdateRequest']

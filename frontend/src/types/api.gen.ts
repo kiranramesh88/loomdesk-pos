@@ -658,7 +658,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Read-only store identity for the admin sidebar. Editing belongs to the Settings phase. */
+        /** @description Read-only store identity for the admin sidebar. Settings has its own endpoint, `settings/`. */
         get: operations["store_retrieve"];
         put?: never;
         post?: never;
@@ -666,6 +666,34 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/store/settings/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description The store's details and pricing rules (decision D10: GST rules themselves stay read-only).
+         *
+         *     A change applies to bills priced from now on. Saved sales and receipts keep what they were sold with,
+         *     and a bill already on the till gets 409 `total_changed` at checkout if its total moved.
+         */
+        get: operations["store_settings_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * @description The store's details and pricing rules (decision D10: GST rules themselves stay read-only).
+         *
+         *     A change applies to bills priced from now on. Saved sales and receipts keep what they were sold with,
+         *     and a bill already on the till gets 409 `total_changed` at checkout if its total moved.
+         */
+        patch: operations["store_settings_partial_update"];
         trace?: never;
     };
     "/api/v1/suppliers/": {
@@ -1188,6 +1216,15 @@ export interface components {
             email?: string;
             full_name?: string;
             role?: components["schemas"]["RoleEnum"];
+        };
+        PatchedStoreSettingsUpdateRequest: {
+            name?: string;
+            code?: string;
+            address?: string;
+            state?: string;
+            gstin?: string;
+            prices_include_tax?: boolean;
+            cashier_discount_limit_pct?: number;
         };
         /** @description Contact and business details only. Balances change through purchases and payments, never here. */
         PatchedSupplierWriteRequest: {
@@ -1851,6 +1888,18 @@ export interface components {
             readonly state: string;
             /** @description The store's current date. Date filters (e.g. today's sales) use store dates, not the device's. */
             readonly today: string;
+        };
+        /** @description The store's details, printed on future receipts, and its pricing rules. Admin only. */
+        StoreSettings: {
+            readonly name: string;
+            readonly code: string;
+            readonly address: string;
+            readonly state: string;
+            readonly gstin: string;
+            readonly prices_include_tax: boolean;
+            readonly cashier_discount_limit_pct: number;
+            /** @description GST states and union territories the store can be in. */
+            readonly states: string[];
         };
         SupplierDetail: {
             readonly id: number;
@@ -3203,6 +3252,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Store"];
+                };
+            };
+        };
+    };
+    store_settings_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreSettings"];
+                };
+            };
+        };
+    };
+    store_settings_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedStoreSettingsUpdateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedStoreSettingsUpdateRequest"];
+                "multipart/form-data": components["schemas"]["PatchedStoreSettingsUpdateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreSettings"];
                 };
             };
         };

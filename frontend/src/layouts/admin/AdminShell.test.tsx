@@ -23,6 +23,11 @@ function mockApi({ me = ME_ADMIN, store = () => jsonResponse(200, STORE), logout
     const url = String(input)
     if (url.endsWith('/auth/session/')) return jsonResponse(200, sessionOf(me))
     if (url.endsWith('/store/')) return store()
+    // The Settings page, opened by the navigation tests.
+    if (url.endsWith('/store/settings/')) {
+      return jsonResponse(200, { ...STORE, address: 'Beach Road', gstin: '', prices_include_tax: false, cashier_discount_limit_pct: 10, states: ['Kerala'] })
+    }
+    if (url.endsWith('/catalog/tax-rules/') || url.endsWith('/catalog/categories/')) return jsonResponse(200, [])
     if (url.endsWith('/auth/logout/')) return logout()
     throw new Error(`Unexpected request ${url}`)
   })

@@ -1418,8 +1418,8 @@ paths:
   /api/v1/store/:
     get:
       operationId: store_retrieve
-      description: Read-only store identity for the admin sidebar. Editing belongs
-        to the Settings phase.
+      description: Read-only store identity for the admin sidebar. Settings has its
+        own endpoint, `settings/`.
       tags:
       - store
       security:
@@ -1430,6 +1430,54 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Store'
+          description: ''
+  /api/v1/store/settings/:
+    get:
+      operationId: store_settings_retrieve
+      description: |-
+        The store's details and pricing rules (decision D10: GST rules themselves stay read-only).
+
+        A change applies to bills priced from now on. Saved sales and receipts keep what they were sold with,
+        and a bill already on the till gets 409 `total_changed` at checkout if its total moved.
+      tags:
+      - store
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoreSettings'
+          description: ''
+    patch:
+      operationId: store_settings_partial_update
+      description: |-
+        The store's details and pricing rules (decision D10: GST rules themselves stay read-only).
+
+        A change applies to bills priced from now on. Saved sales and receipts keep what they were sold with,
+        and a bill already on the till gets 409 `total_changed` at checkout if its total moved.
+      tags:
+      - store
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedStoreSettingsUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedStoreSettingsUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedStoreSettingsUpdateRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoreSettings'
           description: ''
   /api/v1/suppliers/:
     get:
@@ -2707,6 +2755,34 @@ components:
           maxLength: 120
         role:
           $ref: '#/components/schemas/RoleEnum'
+    PatchedStoreSettingsUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        code:
+          type: string
+          minLength: 1
+          pattern: ^[A-Z0-9][A-Z0-9-]{0,19}$
+        address:
+          type: string
+          minLength: 1
+          maxLength: 300
+        state:
+          type: string
+          minLength: 1
+          maxLength: 60
+        gstin:
+          type: string
+          maxLength: 15
+        prices_include_tax:
+          type: boolean
+        cashier_discount_limit_pct:
+          type: integer
+          maximum: 100
+          minimum: 0
     PatchedSupplierWriteRequest:
       type: object
       description: Contact and business details only. Balances change through purchases
@@ -4671,6 +4747,47 @@ components:
       - name
       - state
       - today
+    StoreSettings:
+      type: object
+      description: The store's details, printed on future receipts, and its pricing
+        rules. Admin only.
+      properties:
+        name:
+          type: string
+          readOnly: true
+        code:
+          type: string
+          readOnly: true
+        address:
+          type: string
+          readOnly: true
+        state:
+          type: string
+          readOnly: true
+        gstin:
+          type: string
+          readOnly: true
+        prices_include_tax:
+          type: boolean
+          readOnly: true
+        cashier_discount_limit_pct:
+          type: integer
+          readOnly: true
+        states:
+          type: array
+          items:
+            type: string
+          readOnly: true
+          description: GST states and union territories the store can be in.
+      required:
+      - address
+      - cashier_discount_limit_pct
+      - code
+      - gstin
+      - name
+      - prices_include_tax
+      - state
+      - states
     SupplierDetail:
       type: object
       properties:
