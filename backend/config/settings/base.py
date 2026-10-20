@@ -39,7 +39,7 @@ DEBUG = env_bool("DJANGO_DEBUG", False)
 ALLOWED_HOSTS = [h.strip() for h in (env("DJANGO_ALLOWED_HOSTS", "") or "").split(",") if h.strip()]
 
 INSTALLED_APPS = [
-    "django.contrib.admin",
+    "config.apps.LoomDeskAdminConfig",  # django.contrib.admin with sign-in limits
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
@@ -59,6 +59,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "config.csp.ContentSecurityPolicyMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -68,12 +69,16 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = "config.urls"
+
+# Content-Security-Policy per path (config/csp.py). Report-only sends it without enforcing it.
+LOOMDESK_CSP_ENABLED = True
+LOOMDESK_CSP_REPORT_ONLY = env_bool("DJANGO_CSP_REPORT_ONLY", False)
 WSGI_APPLICATION = "config.wsgi.application"
 
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        "DIRS": [BASE_DIR / "config" / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [

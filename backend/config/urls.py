@@ -3,7 +3,7 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path, re_path
 from django.views.static import serve
-from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerSplitView
 
 from apps.sales.urls import billing_urlpatterns, sales_urlpatterns
 
@@ -18,7 +18,12 @@ api_v1 = [
     path("billing/", include(billing_urlpatterns)),
     path("sales/", include(sales_urlpatterns)),
     path("schema/", SpectacularAPIView.as_view(), name="api-schema"),
-    path("docs/", SpectacularSwaggerView.as_view(url_name="api-schema"), name="api-docs"),
+    # The split view serves its start-up script as a file, so the CSP needs no inline scripts.
+    path(
+        "docs/",
+        SpectacularSwaggerSplitView.as_view(url_name="api-schema", template_name="loomdesk/swagger_ui.html"),
+        name="api-docs",
+    ),
 ]
 
 urlpatterns = [

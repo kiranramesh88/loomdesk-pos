@@ -37,6 +37,9 @@ print(json.dumps({
     "hsts": settings.SECURE_HSTS_SECONDS,
     "whitenoise": "whitenoise.middleware.WhiteNoiseMiddleware" in settings.MIDDLEWARE,
     "schema": settings.SPECTACULAR_SETTINGS["SERVE_PERMISSIONS"],
+    "middleware": settings.MIDDLEWARE[:3],
+    "csp": [settings.LOOMDESK_CSP_ENABLED, settings.LOOMDESK_CSP_REPORT_ONLY],
+    "admin": "config.apps.LoomDeskAdminConfig" in settings.INSTALLED_APPS,
 }))
 """
 
@@ -63,6 +66,13 @@ def test_production_settings_load_from_the_environment():
     assert values["secure"] == [True, True, True]
     assert values["hsts"] == 31536000
     assert values["whitenoise"] is True
+    assert values["middleware"] == [
+        "django.middleware.security.SecurityMiddleware",
+        "whitenoise.middleware.WhiteNoiseMiddleware",
+        "config.csp.ContentSecurityPolicyMiddleware",
+    ]
+    assert values["csp"] == [True, False]  # enforced unless DJANGO_CSP_REPORT_ONLY is set
+    assert values["admin"] is True
     assert values["schema"] == ["apps.accounts.permissions.IsAdmin"]
     # The cache has its own autocommitting connection to the same database.
     assert values["cache"].endswith("DatabaseCache")

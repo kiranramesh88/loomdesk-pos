@@ -63,7 +63,7 @@ These can't be carried over from the prototype.
 
 Each phase ends in something that can be demoed. The backend and frontend for a module ship together, following the spec's order in §10. The big change from that order is that billing comes early.
 
-> **Renumbered on 20 Oct 2026 (the user's call):** Products was built as **Phase 3**, ahead of Billing, and Billing became **Phase 4**. **Phase 5** covered Transactions and an initial sales summary only; voids and Returns are not yet scheduled. **Phase 6** is the Inventory module: stock levels, adjustments and movement history from row 4. **Phase 7** is Suppliers and Purchasing (the supplier half of row 6); Staff and Overview/Reports are not yet scheduled. **Phase 8** is the mobile admin for the modules built so far. **Phase 9** is deployment and production readiness only; row 9's accessibility and visual hardening pass is not yet scheduled. The table below keeps the original plan for reference; §9 logs the order actually built.
+> **Renumbered on 20 Oct 2026 (the user's call):** Products was built as **Phase 3**, ahead of Billing, and Billing became **Phase 4**. **Phase 5** covered Transactions and an initial sales summary only; voids and Returns are not yet scheduled. **Phase 6** is the Inventory module: stock levels, adjustments and movement history from row 4. **Phase 7** is Suppliers and Purchasing (the supplier half of row 6); Staff and Overview/Reports are not yet scheduled. **Phase 8** is the mobile admin for the modules built so far. **Phase 9** is deployment and production readiness only; row 9's accessibility and visual hardening pass is not yet scheduled. **Phase 10** is security hardening: the PIN race, the Django admin sign-in limit and a Content-Security-Policy. The table below keeps the original plan for reference; §9 logs the order actually built.
 
 | Phase | Scope | Exit criteria |
 |---|---|---|
@@ -1164,7 +1164,7 @@ Scope set by the user: production configuration, static and frontend delivery, d
   - Login returned 429 after ten attempts a minute.
   - Both counters were rows in `loomdesk_prod`'s cache table.
 
-**Limits and deferred items (also in `docs/deployment.md` §8):**
+**Limits and deferred items (at the time; `docs/deployment.md` §9 has the current list):**
 - **Lockout race:** the counter is a read-then-write, so simultaneous wrong PINs can allow one or two extra attempts.
 - **No CSP header yet,** and the `/django-admin/` login isn't throttled.
 - **One database role:** the runtime role also runs migrations.
@@ -1175,3 +1175,84 @@ Scope set by the user: production configuration, static and frontend delivery, d
   - The "every admin section reachable from More" checklist item stays open until those modules exist.
 - **Not yet run:** the accessibility and visual hardening pass from row 9 of §1.
 - **Product form (left as is):** a scripted `fill` of the variant SKU straight from the Colour field appends to the suggested SKU, because the suggestion is written when Colour loses focus. A person who clicks or tabs into the field sees the suggestion first.
+
+### Phase 10: Security hardening (done, 20 Oct 2026)
+
+Scope set by the user: close the approval-PIN race, rate-limit `/django-admin/` sign-in, and add a Content-Security-Policy, with no new features and no public deployment. No new libraries.
+
+**A. Approval-PIN lockout under concurrency**
+- **The problem:** the lockout read a count from the cache, checked the PIN, then wrote count + 1. Simultaneous wrong PINs all read the same count, and each got a guess.
+  - The database cache can't increment atomically.
+  - A row written in the checkout's transaction would be rolled back along with the refused checkout.
+- **The guard:** `AttemptGuard` (one row per key, migration `accounts.0002`) and `apps/accounts/attempts.reserve()`.
+  - `reserve()` locks the row with `SELECT … FOR UPDATE`, refuses at the limit, and otherwise counts the attempt *before* the PIN is checked, in its own committed transaction.
+  - Simultaneous attempts queue on the row lock, so at most five PINs are checked per approver. The lock lasts until 15 minutes after the last one, and the right PIN clears the count, as before.
+- **Checkout:** checks the approval before opening the sale's transaction, then re-checks the figures under the stock lock. An over-limit discount still needs an approver if prices moved.
+  - The sale view uses `transaction.non_atomic_requests`. It already ran its own transaction.
+  - `config/exceptions.py` keeps DRF from marking an enclosing transaction for rollback for such views. In production there is none; in tests it's pytest's.
+- **Tests:**
+  - **Simultaneous wrong PINs:** a PostgreSQL thread test sends eight wrong PINs at once, on bills for different items, with the PIN check slowed so they overlap. Exactly five are checked and three refused, and no sale or stock change follows.
+    - Against the old code it fails: more than five were checked.
+    - It first passed against the old code by accident. The bills shared a product, then the test database lacked the store-settings row, whose insert queued every till; in a real store that row already exists. The final test creates the row first and uses a separate product per bill.
+  - **Without pytest's transaction (as in production):** each refused checkout writes nothing but stays counted.
+  - **Bypass attempts:** other cashiers, fresh idempotency keys and the quote endpoint all hit the same lock.
+  - **Window:** the lock ends 15 minutes after the last attempt, and the right PIN clears earlier wrong ones.
+  - **Replay:** a replayed bill checks no PIN.
+  - **The guard itself:** unit tests for the limit, the window, release and clear, multi-key give-back, hashed account keys and the clean-up of idle rows.
+
+**B. Django admin sign-in limit**
+- **The site:** `config/admin_site.LoomDeskAdminSite`, installed through `config.apps.LoomDeskAdminConfig`, which replaces `django.contrib.admin` in `INSTALLED_APPS`.
+- **The limits:** 5 failed sign-ins per account and 10 per client address in 15 minutes, on the same guard.
+- **A lockout:** gets the normal sign-in page with a message, status 429 and `Retry-After`; its password is never checked.
+- **A successful sign-in:** clears its account's count and isn't held against its address. A store account without staff access counts as a failure.
+- **Privacy:** account keys are hashes, never emails.
+- **Tests:** a normal sign-in; the lockout (with authentication watched, so the locked attempt is proven unchecked); expiry; the address limit across accounts; successes not counting; non-staff accounts.
+
+**C. Content-Security-Policy (`config/csp.py`)**
+- **Policies by path:**
+  - **The app:** `script-src 'self'`, and `style-src 'self'` plus a per-request nonce. Also `img-src 'self' blob:`, `font-src 'self' data:` (one Manrope subset is inlined into the CSS), `connect-src 'self'`, `object-src 'none'`, `base-uri 'none'`, `frame-ancestors 'none'`.
+  - **`/api/`:** `default-src 'none'`.
+  - **Swagger UI:** jsDelivr. It switches to `SpectacularSwaggerSplitView`, so there is no inline script, and a template puts the nonce on its inline style.
+  - **`/media/`:** images only, sandboxed.
+  - **`/django-admin/`:** its own static files. Rendered admin pages have no inline scripts, styles or handlers.
+  - No policy allows `'unsafe-inline'` or `'unsafe-eval'`.
+- **What needed adapting:**
+  - **Radix dialogs** inject a scroll-lock `<style>` through react-remove-scroll. Django writes the nonce into `index.html`, and `lib/cspNonce.ts` sets get-nonce's `__webpack_nonce__` fallback, with no new dependency.
+  - **Radix Select's viewport** renders its own `<style>`, so `components/ui/Select` passes the nonce.
+  - **Zod 4** probes `new Function`, which the browser reports. `main.tsx` sets `z.config({ jitless: true })`.
+- **Switches:** report-only with `DJANGO_CSP_REPORT_ONLY=true`; off in development (Vite serves the app, and Django's debug pages are inline).
+- **Tests:**
+  - The headers and the matching meta nonce on the shell.
+  - A new nonce per request.
+  - No unsafe source in any policy.
+  - Swagger's nonce'd style, file-only scripts, and its script endpoint.
+  - The media and admin policies.
+  - Report-only and disabled modes.
+  - Production settings place the middleware after WhiteNoise.
+
+**Validation:**
+- **Frontend:** typecheck, lint and build are clean; 259 tests pass.
+  - On this machine the default fully parallel run timed out on 3 to 8 tests (5s) per run. The last commit's code did the same, with 8 and then 4 failures, so it isn't this change.
+  - With `--maxWorkers=4`, all 259 passed twice in a row.
+- **Backend:** 365 passed on PostgreSQL. On SQLite, 361 passed and 4 were skipped (the PostgreSQL-only concurrency tests, now including the PIN one).
+- **Schema and migrations:** the schema is unchanged, and `makemigrations --check` is clean.
+- **Migrations applied:** `accounts.0002` was applied to `loomdesk_prod` and to the dev `loomdesk` database (additive; no reset or reseed). `db.sqlite3` is untouched.
+
+**Browser and server checks (Waitress, production settings, `loomdesk_prod`, enforced CSP, every violation recorded):**
+- **Nonce:** the shell's policy carries a nonce matching the page's meta.
+- **Dialogs:** the injected scroll-lock style carries the nonce and takes effect (`overflow: hidden`).
+- **Photos:** the `blob:` preview and `/media/` photos render.
+- **Reprint and mobile:** the receipt reprint prints, and five mobile routes load after a refresh.
+- **Swagger UI:** renders its operations from jsDelivr.
+- **Django admin:** the sign-in page is styled and shows its error, and the sixth failed sign-in on the server got 429 with `Retry-After`.
+- **Cashier:** a 20% discount was refused with a wrong PIN, with no sale or stock change. The right PIN then completed `LD-000002` with ₹298 approved by Store Owner, and stock fell by one.
+- **Concurrency:** eight simultaneous wrong PINs against the server's threads gave exactly 5 checked and 3 locked out, and no sale.
+- **Violations:** after the zod and Select fixes, none in the app, API, docs or admin.
+
+**Limits (also in `docs/deployment.md` §9):**
+- **API sign-in throttling** is still DRF's read-then-write throttle in the cache, so a burst from one client can slightly exceed 10 a minute.
+- **Per-account lockouts** let anyone who knows an admin's email lock that account's `/django-admin/` sign-in, or an approver's PIN, for 15 minutes.
+- **Swagger UI** depends on jsDelivr.
+- **A directly opened photo** shows unstyled, because Chrome's image viewer styles it inline.
+- **After `collectstatic`,** the server must restart before the new build's files are served (WhiteNoise indexes at start-up).
+- **No public deployment** and no CSP report endpoint.

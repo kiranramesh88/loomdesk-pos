@@ -31,6 +31,7 @@ Set these in the host's secret manager or service environment. **Production neve
 | `DJANGO_SECURE_HSTS_SECONDS` | no | Default `31536000` (one year). Use a small value for the first deploy if HTTPS isn't proven yet. |
 | `DJANGO_SERVE_MEDIA` | no | Default `true`. Set `false` when the proxy or a CDN serves `/media/`. |
 | `DJANGO_LOG_LEVEL` | no | Default `INFO`. Logs go to stdout/stderr. |
+| `DJANGO_CSP_REPORT_ONLY` | no | Default `false`. `true` sends the Content-Security-Policy as report-only, so violations show in the browser console without blocking anything (section 7). |
 
 Never set `DB_ENGINE` in production (the settings refuse `sqlite`), and never set `SEED_DEMO_PASSWORD`.
 
@@ -47,6 +48,8 @@ python -m venv .venv && .venv/bin/pip install -r requirements.txt   # .venv\Scri
 .venv/bin/python manage.py createcachetable --database cache   # shared cache table (idempotent)
 .venv/bin/python manage.py check --deploy                 # must report no errors
 ```
+
+Restart the server after `collectstatic`. WhiteNoise indexes the static files when the process starts, so a running server answers 404 for the new build's hashed assets, and the pages that name them render blank.
 
 `check --deploy` includes LoomDesk's own checks: the frontend build and collected assets exist (E001, E002), and the cache is shared across workers but outside the request transaction (E003, E004).
 
@@ -92,20 +95,47 @@ waitress-serve --listen=127.0.0.1:8000 --threads=8 --trusted-proxy=127.0.0.1 \
 ```
 
 - Put a TLS-terminating proxy or platform router in front. It must set `X-Forwarded-Proto` and overwrite any value a client sends, because Django uses it to recognise HTTPS (secure cookies, redirects, CSRF).
-- **Workers and instances:** login throttling (10 attempts a minute per client) and the approval-PIN lockout (5 wrong PINs lock that approver for 15 minutes) are kept in the shared database cache. They hold across threads, processes and instances. The cache has its own autocommitting connection: on the request's connection, the rollback of an error response would erase the very attempts being counted.
-- Limits of the counters: two wrong PINs submitted at the same instant can both be counted from the same starting value, so the lockout can allow a 6th attempt in a race. Login throttling is per client IP, so behind a proxy configure `--trusted-proxy` correctly or every user shares the proxy's address.
+- **Workers and instances:** every limit below is stored in PostgreSQL, so it holds across threads, processes and instances.
+  - **Approval PIN:** 5 wrong PINs per approver, then that PIN is locked until 15 minutes after the last one.
+  - **Django admin sign-in:** 5 failures per account and 10 per client address in 15 minutes. A locked-out attempt gets status 429 and its password isn't checked.
+  - These two count in `AttemptGuard` rows (`apps/accounts/attempts.py`). Each attempt is counted under a row lock, and committed, before the secret is checked. However many attempts arrive at once, no more than the limit are checked. A request that fails later can't roll its count back.
+  - **API sign-in:** throttled to 10 attempts a minute per client by DRF, in the shared database cache. The cache has its own autocommitting connection: on the request's connection, the rollback of an error response would erase the very attempts being counted.
+- **Client address:** the address limits use the address Django sees. Behind a proxy, configure `--trusted-proxy` correctly, or every user shares the proxy's address and its limits.
 
-## 7. Smoke test after each deploy
+## 7. Content-Security-Policy
+
+`config/csp.py` sets a policy on every response Django builds. Static files come from WhiteNoise without one; they are the build's own files.
+
+| Path | Policy, in short |
+|---|---|
+| The app (every page route) | Scripts from this origin only. Styles from this origin, plus inline `<style>` elements that carry the request's nonce. Images from this origin and `blob:` (the photo preview). Fonts from this origin and `data:`. Requests to this origin. No plugins, no `<base>`, never framed. |
+| `/api/` | Nothing may load (`default-src 'none'`). |
+| `/api/v1/docs/` (Swagger UI, admin-only) | Scripts and styles from `cdn.jsdelivr.net`, plus Swagger's inline style with the nonce. Its start-up script is served as a file. |
+| `/media/` | Images only, sandboxed. |
+| `/django-admin/` | Its own static files only. |
+
+- No policy allows `'unsafe-inline'` or `'unsafe-eval'`.
+- Two libraries add inline `<style>` elements at runtime: Radix dialogs (react-remove-scroll) and Radix Select. `spa_index` writes the nonce into `index.html`, and `src/lib/cspNonce.ts` hands it to both.
+- Zod runs in `jitless` mode, so it never probes for `eval`.
+- To try a policy change, set `DJANGO_CSP_REPORT_ONLY=true` and watch the browser console.
+- There is no violation-report endpoint.
+
+## 8. Smoke test after each deploy
 
 1. `GET /api/v1/auth/session/` → 200 `{"user": null}` and a `csrftoken` cookie marked `Secure`.
-2. `GET /admin/mobile/` and `/admin/products/12` → 200 HTML (the SPA). `GET /static/assets/does-not-exist.js` → 404 text.
+2. `GET /admin/mobile/` and `/admin/products/12` → 200 HTML (the SPA), with a `Content-Security-Policy` header whose nonce matches the page's `csp-nonce` meta. `GET /static/assets/does-not-exist.js` → 404 text.
 3. Sign in as an admin. A cashier opening `/admin` lands on `/403`, and `GET /api/v1/inventory/variants/` as a cashier → 403.
 4. A product photo loads from `/media/…`, and is still there after restarting the server.
 
-## 8. Known limits
+## 9. Known limits
 
-- **No Content-Security-Policy yet.** The app loads no third-party scripts (Swagger UI, admin-only, uses a CDN). A CSP is the next hardening step.
-- **The Django admin login** isn't rate-limited like the API login. Restrict `/django-admin/` at the proxy, or don't create superusers.
+- **API sign-in throttling** uses DRF's throttle. It reads, then writes, its history in the cache, so simultaneous attempts from one client can slightly exceed 10 a minute. The approval PIN and the Django admin use the row-locked counter instead.
+- **Account lockouts can be triggered by anyone who knows the address.**
+  - Five wrong admin sign-ins lock that account's `/django-admin/` access for 15 minutes; the POS sign-in is unaffected.
+  - Five wrong PINs lock that approver's discount approvals for 15 minutes.
+  - That's the trade-off of a per-account limit. Restrict `/django-admin/` at the proxy if it needn't be public.
+- **Swagger UI depends on jsDelivr** being reachable. It's admin-only.
+- **A photo opened directly** at its `/media/` URL shows unstyled. Chrome's built-in image viewer styles the page inline, and the media policy blocks that; the image itself shows.
 - **Sessions** last 12 hours. There's no forced sign-out of other sessions when a password changes, beyond Django's default session invalidation.
 - **Payments** are recorded, not processed. There's no payment gateway, so nothing is verified with a bank.
 - **One database role** runs both the app and its migrations. A separate migration role would let the runtime role lose `CREATE` on the schema.

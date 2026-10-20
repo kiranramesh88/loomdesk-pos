@@ -77,3 +77,17 @@ class User(AbstractUser):
 
     def check_approval_pin(self, pin: str) -> bool:
         return bool(self.approval_pin_hash) and check_password(pin, self.approval_pin_hash)
+
+
+class AttemptGuard(models.Model):
+    """Counts guarded attempts (approval PINs, Django admin sign-ins) under a row lock; see `attempts.py`.
+
+    `key` names what is guarded, e.g. `approval-pin:12`. Account keys hold a hash, never the email.
+    """
+
+    key = models.CharField(max_length=120, primary_key=True)
+    attempts = models.PositiveIntegerField(default=0)
+    last_attempt_at = models.DateTimeField(null=True, db_index=True)
+
+    def __str__(self) -> str:
+        return f"{self.key}: {self.attempts}"

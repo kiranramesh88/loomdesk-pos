@@ -51,8 +51,8 @@ DATABASES = {
     }
 }
 
-# --- Shared cache: login throttling and the approval-PIN lockout must count across every worker and
-# instance. The database cache needs no extra service. It gets its own autocommitting connection to the
+# --- Shared cache: login throttling must count across every worker and instance (the approval-PIN and
+# Django admin limits use row-locked database rows instead, apps/accounts/attempts.py). The database cache needs no extra service. It gets its own autocommitting connection to the
 # same database (config/routers.py explains why); create its table with
 # `createcachetable --database cache`.
 DATABASES["cache"] = {**DATABASES["default"], "ATOMIC_REQUESTS": False}

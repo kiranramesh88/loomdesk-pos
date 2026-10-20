@@ -16,7 +16,6 @@ from apps.store.models import StoreSettings
 from apps.sales.test_api import (  # noqa: F401
     SALES_URL,
     _checkout,
-    _clear_pin_failures,
     _client,
     _on_hand,
     _user,

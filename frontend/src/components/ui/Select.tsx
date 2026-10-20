@@ -1,6 +1,7 @@
 import * as RadixSelect from '@radix-ui/react-select'
 import { Check, ChevronDown } from 'lucide-react'
 
+import { cspNonce } from '@/lib/cspNonce'
 import { cx } from '@/lib/cx'
 
 import { controlBox } from './controlStyles'
@@ -67,7 +68,7 @@ export function Select<V extends string = string>({
               sideOffset={6}
               className="z-50 max-h-(--radix-select-content-available-height) min-w-(--radix-select-trigger-width) overflow-hidden rounded-control border border-line bg-surface shadow-overlay"
             >
-              <RadixSelect.Viewport className="p-1">
+              <RadixSelect.Viewport className="p-1" nonce={cspNonce()}>
                 {options.map((option) => (
                   <RadixSelect.Item
                     key={option.value}

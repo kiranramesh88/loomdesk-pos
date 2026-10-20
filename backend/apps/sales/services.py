@@ -5,11 +5,13 @@ import hashlib
 import json
 from decimal import Decimal
 
-from django.core.cache import cache
+from datetime import timedelta
+
 from django.db import IntegrityError, transaction
 from rest_framework import status
 from rest_framework.exceptions import APIException, ValidationError
 
+from apps.accounts import attempts
 from apps.accounts.models import Role, User
 from apps.catalog.models import Product, Variant
 from apps.inventory.models import StockMovement
@@ -21,7 +23,7 @@ from .pricing import BP, PricedBill, price_bill, round_paise
 
 INVOICE_SERIES = "LD"
 PIN_ATTEMPTS = 5
-PIN_LOCK_SECONDS = 15 * 60
+PIN_LOCK_WINDOW = timedelta(minutes=15)
 
 
 class Conflict(APIException):
@@ -93,17 +95,26 @@ def cashier_limit_paise(user: User, subtotal: int, store: StoreSettings) -> int 
 
 
 def _pin_key(approver_id: int) -> str:
-    return f"approval-pin-failures:{approver_id}"
+    return f"approval-pin:{approver_id}"
+
+
+def _above_limit(amount: int, limit: int | None) -> bool:
+    return bool(amount) and limit is not None and amount > limit
 
 
 def authorise_discount(user: User, amount: int, limit: int | None, approver_id, pin) -> User | None:
     """Who stands behind the discount. Above a cashier's limit that's a Senior cashier or Admin
-    who entered their PIN. Wrong PINs are counted per approver and lock the PIN for 15 minutes."""
+    who entered their PIN.
+
+    PIN attempts are counted per approver under a row lock (`apps.accounts.attempts`): five in a
+    15-minute window, however many arrive at once, then the PIN is locked until 15 minutes after the
+    last one. The count commits on its own, so call this outside the sale's transaction.
+    """
     if not amount:
         return None
     if limit is None:
         return user  # Senior cashiers and Admins apply discounts on their own authority.
-    if amount <= limit:
+    if not _above_limit(amount, limit):
         return None
     if not approver_id or not pin:
         raise ValidationError(
@@ -114,16 +125,34 @@ def authorise_discount(user: User, amount: int, limit: int | None, approver_id, 
     ).first()
     if approver is None:
         raise ValidationError({"approver_id": ["Choose a Senior cashier or Admin to approve the discount."]})
-    failures = cache.get(_pin_key(approver.pk), 0)
-    if failures >= PIN_ATTEMPTS:
+    reservation = attempts.reserve(_pin_key(approver.pk), PIN_ATTEMPTS, PIN_LOCK_WINDOW)
+    if not reservation.allowed:
         raise ValidationError(
-            {"approval_pin": [f"Too many wrong PINs. {approver.full_name} can approve again in 15 minutes."]}
+            {
+                "approval_pin": [
+                    f"Too many wrong PINs. {approver.full_name} can approve again in "
+                    f"{reservation.retry_minutes} minute{'s' if reservation.retry_minutes != 1 else ''}."
+                ]
+            }
         )
     if not approver.check_approval_pin(pin):
-        cache.set(_pin_key(approver.pk), failures + 1, PIN_LOCK_SECONDS)
         raise ValidationError({"approval_pin": ["That PIN isn’t right."]})
-    cache.delete(_pin_key(approver.pk))
+    attempts.clear(_pin_key(approver.pk))
     return approver
+
+
+def _approve_checkout_discount(user: User, data: dict) -> User | None:
+    """Check the discount's approval before the sale's transaction opens, so a wrong PIN stays counted
+    even though the refused checkout writes nothing. `_write_sale` re-checks the figures under lock."""
+    if not data.get("discount"):
+        return None
+    store = StoreSettings.load()
+    items = resolve_items(data["lines"], lock=False)
+    subtotal = sum(variant.price_paise * quantity for variant, quantity in items)
+    amount = discount_paise(data.get("discount"), subtotal)
+    return authorise_discount(
+        user, amount, cashier_limit_paise(user, subtotal, store), data.get("approver_id"), data.get("approval_pin")
+    )
 
 
 def quote(user: User, data: dict) -> tuple[PricedBill, int | None]:
@@ -160,23 +189,29 @@ def checkout(user: User, data: dict, key) -> tuple[Sale, bool]:
     fingerprint = _fingerprint(data)
     if existing := _replay(user, key, fingerprint):
         return existing, False
+    approver = _approve_checkout_discount(user, data)
     try:
         with transaction.atomic():
-            return _write_sale(user, data, key, fingerprint), True
+            return _write_sale(user, data, key, fingerprint, approver), True
     except IntegrityError:
         if existing := _replay(user, key, fingerprint):
             return existing, False
         raise
 
 
-def _write_sale(user: User, data: dict, key, fingerprint: str) -> Sale:
+def _write_sale(user: User, data: dict, key, fingerprint: str, approver: User | None) -> Sale:
     store = StoreSettings.load()
     items = resolve_items(data["lines"], lock=True)
     subtotal = sum(variant.price_paise * quantity for variant, quantity in items)
     amount = discount_paise(data.get("discount"), subtotal)
-    approver = authorise_discount(
-        user, amount, cashier_limit_paise(user, subtotal, store), data.get("approver_id"), data.get("approval_pin")
-    )
+    limit = cashier_limit_paise(user, subtotal, store)
+    # Prices may have moved since the approval was checked: an over-limit discount still needs one.
+    if _above_limit(amount, limit) and approver is None:
+        raise ValidationError(
+            {"approval_pin": ["This discount is above your limit. A Senior cashier or Admin must approve it."]}
+        )
+    if not amount:
+        approver = None
     bill = price_bill(items, amount, store.prices_include_tax)
 
     if bill.total_paise != data["expected_total_paise"]:

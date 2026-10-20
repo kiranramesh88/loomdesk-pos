@@ -1,9 +1,10 @@
 """Send Django's database cache to its own connection.
 
 API requests run in a transaction (ATOMIC_REQUESTS), and an error response rolls it back. The login
-throttle and the approval-PIN lockout record their counters exactly when they answer with an error,
-so on the request's own connection those writes would be undone and neither limit would ever trigger.
-The `cache` alias is the same database on a separate, autocommitting connection.
+throttle records its counter exactly when it answers with an error, so on the request's own connection
+that write would be undone and the limit would never trigger. The `cache` alias is the same database on
+a separate, autocommitting connection. (The approval-PIN and Django admin limits don't use the cache:
+they count in row-locked `AttemptGuard` rows, see apps/accounts/attempts.py.)
 """
 
 CACHE_ALIAS = "cache"

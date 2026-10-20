@@ -38,7 +38,7 @@ def shared_cache_check(app_configs, **kwargs):
             return [
                 Error(
                     "The database cache shares the request transaction, so a rolled-back error response would "
-                    "erase login-throttle and PIN-lockout counts.",
+                    "erase login-throttle counts.",
                     hint="Route the django_cache model to an alias without ATOMIC_REQUESTS (config.routers.CacheRouter).",
                     id="loomdesk.E004",
                 )
@@ -46,8 +46,7 @@ def shared_cache_check(app_configs, **kwargs):
     if backend.endswith("LocMemCache"):
         return [
             Error(
-                "The cache is per-process, so login throttling and the approval-PIN lockout wouldn't be "
-                "shared between workers.",
+                "The cache is per-process, so login throttling wouldn't be shared between workers.",
                 hint="Use the production settings' DatabaseCache (run `createcachetable`) or another shared cache.",
                 id="loomdesk.E003",
             )

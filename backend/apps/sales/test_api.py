@@ -1,15 +1,18 @@
 """Billing: staff catalogue, pricing and GST, checkout integrity, idempotency, stock and receipts."""
 
 import threading
+import time
 import uuid
 from unittest import mock
 
 import pytest
-from django.core.cache import cache
+from datetime import timedelta
+
 from django.db import connection
+from django.db.models import F
 from rest_framework.test import APIClient
 
-from apps.accounts.models import Role, User
+from apps.accounts.models import AttemptGuard, Role, User
 from apps.catalog.models import Category, Product, TaxRule, Variant
 from apps.inventory.models import StockMovement
 from apps.inventory.services import record_movement
@@ -21,13 +24,6 @@ from apps.store.models import StoreSettings
 PRODUCTS_URL = "/api/v1/billing/products/"
 QUOTE_URL = "/api/v1/sales/quote/"
 SALES_URL = "/api/v1/sales/"
-
-
-@pytest.fixture(autouse=True)
-def _clear_pin_failures():
-    cache.clear()
-    yield
-    cache.clear()
 
 
 def _user(role, email=None, pin=None):
@@ -629,6 +625,117 @@ def test_wrong_pins_lock_the_approver(shirt, cashier, senior):
     fields = _fields(_checkout(client, [(shirt, 1)], total, discount=discount, approver_id=senior.pk, approval_pin="4826"))
     assert "Too many wrong PINs" in fields["approval_pin"][0]
     assert not Sale.objects.exists()
+
+
+OVER_LIMIT = {"kind": "amount", "value": 200_00}
+OVER_LIMIT_TOTAL = 1048_95  # ₹1,199 − ₹200, plus 5% GST
+
+
+def _approve(client, variant, approver, pin, key=None):
+    return _checkout(client, [(variant, 1)], OVER_LIMIT_TOTAL, key=key, discount=OVER_LIMIT, approver_id=approver.pk, approval_pin=pin)
+
+
+def _pin_attempts(approver) -> int:
+    guard = AttemptGuard.objects.filter(key=f"approval-pin:{approver.pk}").first()
+    return guard.attempts if guard else 0
+
+
+def test_lockout_cannot_be_sidestepped(shirt, cashier, senior):
+    """Other cashiers, fresh idempotency keys and the quote endpoint all meet the same lock."""
+    for _ in range(5):
+        _approve(_client(cashier), shirt, senior, "0000")
+    other = _user(Role.CASHIER, email="other@example.com")
+    for client in (_client(cashier), _client(other)):
+        assert "Too many wrong PINs" in _fields(_approve(client, shirt, senior, "4826"))["approval_pin"][0]
+    # The quote never checks a PIN, so it can't be used to guess one.
+    quote = _client(other).post(
+        QUOTE_URL, {"lines": [{"variant": shirt.pk, "quantity": 1}], "discount": OVER_LIMIT}, format="json"
+    )
+    assert quote.status_code == 200 and quote.json()["needs_approval"] is True
+    assert _pin_attempts(senior) == 5
+    assert not Sale.objects.exists()
+    assert _on_hand(shirt) == 5
+
+
+def test_lockout_ends_15_minutes_after_the_last_wrong_pin(shirt, cashier, senior):
+    for _ in range(5):
+        _approve(_client(cashier), shirt, senior, "0000")
+    AttemptGuard.objects.update(last_attempt_at=F("last_attempt_at") - timedelta(minutes=14))
+    assert "can approve again in 1 minute." in _fields(_approve(_client(cashier), shirt, senior, "4826"))["approval_pin"][0]
+    AttemptGuard.objects.update(last_attempt_at=F("last_attempt_at") - timedelta(minutes=1))
+    assert _approve(_client(cashier), shirt, senior, "4826").status_code == 201
+    assert _pin_attempts(senior) == 0
+
+
+def test_the_right_pin_clears_earlier_wrong_ones(shirt, cashier, senior):
+    for _ in range(4):
+        _approve(_client(cashier), shirt, senior, "0000")
+    assert _approve(_client(cashier), shirt, senior, "4826").status_code == 201
+    for _ in range(5):
+        assert _fields(_approve(_client(cashier), shirt, senior, "0000")) == {"approval_pin": ["That PIN isn’t right."]}
+    assert Sale.objects.get().discount_approved_by == senior
+
+
+def test_a_replayed_sale_checks_no_pin(shirt, cashier, senior):
+    key = uuid.uuid4()
+    assert _approve(_client(cashier), shirt, senior, "4826", key=key).status_code == 201
+    # The same bill again returns the saved sale without testing (or counting) the PIN it carries.
+    assert _approve(_client(cashier), shirt, senior, "0000", key=key).status_code == 200
+    assert _pin_attempts(senior) == 0
+    assert Sale.objects.count() == 1
+
+
+@pytest.mark.django_db(transaction=True)
+def test_wrong_pins_stay_counted_when_the_checkout_is_refused(shirt, cashier, senior):
+    """Without pytest's wrapping transaction, as in production: each refused checkout writes nothing,
+    but its PIN attempt is already committed, so the lock still engages."""
+    for _ in range(5):
+        _approve(_client(cashier), shirt, senior, "0000")
+    assert _pin_attempts(senior) == 5
+    assert "Too many wrong PINs" in _fields(_approve(_client(cashier), shirt, senior, "4826"))["approval_pin"][0]
+    assert not Sale.objects.exists()
+    assert _on_hand(shirt) == 5
+    assert StockMovement.objects.filter(variant=shirt).count() == 1  # the opening stock only
+
+
+@pytest.mark.skipif(connection.vendor != "postgresql", reason="Needs Postgres row locks and real concurrent connections")
+@pytest.mark.django_db(transaction=True)
+def test_simultaneous_wrong_pins_cannot_exceed_the_limit(shirt, cashier, senior, monkeypatch):
+    """Eight wrong PINs at once, on bills for different items (one shared item would queue them on its
+    locked stock row). Each check is slowed so they overlap. The old read-then-write count let more than
+    five through; with the row-locked count exactly five are checked and three refused."""
+    real_check = User.check_approval_pin
+
+    def slow_check(user, pin):
+        time.sleep(0.3)
+        return real_check(user, pin)
+
+    monkeypatch.setattr(User, "check_approval_pin", slow_check)
+    # A real store already has its settings row. Without it, each till would insert it inside its own
+    # checkout and the others would wait on that insert, hiding the race this test is about.
+    StoreSettings.load()
+    products = [_product(shirt.product.category, sku=f"SH-CT-{i:03d}") for i in range(2, 9)]
+    variants = [shirt] + [_variant(product) for product in products]
+    tills = [(_client(_user(Role.CASHIER, email=f"till{i}@example.com")), v) for i, v in enumerate(variants)]
+    barrier = threading.Barrier(len(tills))
+    replies = []
+
+    def attempt(client, variant):
+        barrier.wait()
+        replies.append(_approve(client, variant, senior, "0000").json()["fields"]["approval_pin"][0])
+        connection.close()
+
+    threads = [threading.Thread(target=attempt, args=till) for till in tills]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert sorted(r.split(".")[0] for r in replies) == ["That PIN isn’t right"] * 5 + ["Too many wrong PINs"] * 3
+    assert _pin_attempts(senior) == 5
+    assert "Too many wrong PINs" in _fields(_approve(_client(cashier), shirt, senior, "4826"))["approval_pin"][0]
+    assert not Sale.objects.exists()
+    assert all(_on_hand(v) == 5 for v in variants)
 
 
 def test_deactivated_approver_cannot_approve(shirt, cashier, senior):

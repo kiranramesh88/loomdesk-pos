@@ -1,8 +1,10 @@
 import uuid
 
+from django.db import transaction
 from django.db.models import Count, Exists, OuterRef, Prefetch, Q, Sum
 from django.db.models.functions import Coalesce, TruncDate
 from django.shortcuts import get_object_or_404
+from django.utils.decorators import method_decorator
 from django_filters import rest_framework as filters
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema
@@ -179,6 +181,9 @@ class SaleFilter(filters.FilterSet):
         return super().filter_queryset(queryset)
 
 
+# Checkout opens its own transaction. Outside the request's, the approval-PIN count it records before
+# that transaction survives the refused request it belongs to.
+@method_decorator(transaction.non_atomic_requests, name="dispatch")
 class SaleListCreateView(generics.ListAPIView):
     """GET: sales history, newest first. POST: complete a sale.
 

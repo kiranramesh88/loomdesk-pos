@@ -4,6 +4,7 @@ The frontend's lib/http.ts relies on this shape to map errors onto form fields. 
 serializer errors use dotted paths ("variants.2.sku"), which react-hook-form understands.
 """
 
+from django.db import DEFAULT_DB_ALIAS, connections
 from django.http import HttpResponseNotFound, HttpResponseServerError, JsonResponse
 from rest_framework import exceptions, status
 from rest_framework.response import Response
@@ -33,8 +34,25 @@ def _field_errors(value, path: str, out: dict[str, list[str]]) -> None:
         out.setdefault(path, []).extend(_flatten(value))
 
 
-def api_exception_handler(exc, context):
+def _runs_outside_request_transaction(view) -> bool:
+    return DEFAULT_DB_ALIAS in getattr(getattr(view, "dispatch", None), "_non_atomic_requests", ())
+
+
+def _drf_response(exc, context):
+    """DRF's response for `exc`. DRF also marks the request's transaction for rollback. A view that runs
+    outside that transaction (checkout) has none, so the mark would land on whatever transaction encloses
+    the request, such as a test's; keep those flags as they were."""
+    if not _runs_outside_request_transaction(context.get("view")):
+        return exception_handler(exc, context)
+    flags = {db.alias: db.needs_rollback for db in connections.all() if db.in_atomic_block}
     response = exception_handler(exc, context)
+    for alias, flag in flags.items():
+        connections[alias].set_rollback(flag)
+    return response
+
+
+def api_exception_handler(exc, context):
+    response = _drf_response(exc, context)
     if response is None:
         return None
 

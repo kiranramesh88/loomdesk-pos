@@ -22,7 +22,12 @@ def spa_index(request: HttpRequest) -> HttpResponse:
             status=404,
             content_type="text/plain",
         )
-    response = HttpResponse(index.read_text(encoding="utf-8"), content_type="text/html")
+    html = index.read_text(encoding="utf-8")
+    if nonce := getattr(request, "csp_nonce", None):
+        # The page's CSP allows inline <style> only with this nonce; src/app/cspNonce.ts reads it.
+        meta = f'<meta name="csp-nonce" content="{nonce}" />'
+        html = html.replace("<head>", "<head>" + meta, 1)
+    response = HttpResponse(html, content_type="text/html")
     # The shell names the current build's hashed assets, so browsers must revalidate it after a deploy.
     response["Cache-Control"] = "no-cache"
     return response
