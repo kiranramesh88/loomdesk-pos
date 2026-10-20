@@ -24,31 +24,3 @@ def frontend_build_check(app_configs, **kwargs):
             )
         )
     return errors
-
-
-@register(Tags.caches, deploy=True)
-def shared_cache_check(app_configs, **kwargs):
-    backend = settings.CACHES["default"]["BACKEND"]
-    if backend.endswith("DatabaseCache"):
-        from django.db import router
-        from django.core.cache import cache
-
-        alias = router.db_for_write(cache.cache_model_class)
-        if settings.DATABASES[alias].get("ATOMIC_REQUESTS"):
-            return [
-                Error(
-                    "The database cache shares the request transaction, so a rolled-back error response would "
-                    "erase login-throttle counts.",
-                    hint="Route the django_cache model to an alias without ATOMIC_REQUESTS (config.routers.CacheRouter).",
-                    id="loomdesk.E004",
-                )
-            ]
-    if backend.endswith("LocMemCache"):
-        return [
-            Error(
-                "The cache is per-process, so login throttling wouldn't be shared between workers.",
-                hint="Use the production settings' DatabaseCache (run `createcachetable`) or another shared cache.",
-                id="loomdesk.E003",
-            )
-        ]
-    return []

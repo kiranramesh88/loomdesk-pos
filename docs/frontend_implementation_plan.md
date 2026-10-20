@@ -1352,6 +1352,21 @@ Scope set by the user: returns and voids, staff management, reports, settings, t
 
 **Limits:** see `docs/deployment.md` §9.
 
+### Phase 12: Deployment readiness (in progress, 20 Oct 2026)
+
+Scope set by the user: fix the API sign-in throttling race, review deployment readiness, and propose hosting. Nothing is deployed, pushed or bought without approval.
+
+**Security finding fixed: API sign-in throttling could be exceeded and bypassed.**
+- **The race:** DRF's throttle read its history from the cache, decided, then wrote it back. With the save slowed slightly, 20 simultaneous wrong passwords from one address were all checked.
+- **The bypass:** with `NUM_PROXIES` unset, DRF keys the client on the whole `X-Forwarded-For` header, which the client writes. 15 requests with different forged headers were all checked.
+- **The fix:** `LockedScopedRateThrottle` (`apps/accounts/throttling.py`) keeps a sliding window per scope and `REMOTE_ADDR` in a `ThrottleWindow` row (migration `accounts.0004`), under a row lock in its own committed transaction. The time is read once the lock is held, so `Retry-After` never exceeds the window. Sign-in and both set-password views run outside the request transaction.
+- **Removed:** the second `cache` database alias, `config/routers.py` and checks E003/E004. Nothing uses Django's cache any more.
+- **Tests:** 14 in `apps/accounts/test_throttling.py`. Two PostgreSQL thread tests (20 simultaneous attempts give exactly 10 checked and 10 refused; 15 first requests from a new address share one window) fail when the row lock is removed.
+- **End to end:** two Waitress processes with production settings on `loomdesk_prod`, trusting 127.0.0.1 as the proxy. 30 simultaneous wrong sign-ins split across both gave exactly 10 checked and 20 refused, with `Retry-After` 59–60 s. Forged `X-Forwarded-For` prefixes didn't reset the limit, and another address signed in normally. This passed twice.
+- **Migrations:** both databases were backed up (`pg_dump -Fc`) and their targets confirmed first. `accounts.0004` only adds a table. The unused `loomdesk_cache` table in `loomdesk_prod` was left in place.
+
+**Validation:** 513 backend tests pass on PostgreSQL; on SQLite, 499 pass and 14 are skipped (PostgreSQL-only). `makemigrations --check` is clean and the schema is unchanged.
+
 ---
 
 ## 10. Requirements traceability

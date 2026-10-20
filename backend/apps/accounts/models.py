@@ -94,3 +94,18 @@ class AttemptGuard(models.Model):
 
     def __str__(self) -> str:
         return f"{self.key}: {self.attempts}"
+
+
+class ThrottleWindow(models.Model):
+    """Recent requests for one throttled scope and client, kept under a row lock; see `throttling.py`.
+
+    `key` is e.g. `throttle:login:203.0.113.7`. `hits` holds the times (epoch seconds) of the requests
+    still inside the window, oldest first, never more than the scope's limit.
+    """
+
+    key = models.CharField(max_length=120, primary_key=True)
+    hits = models.JSONField(default=list)
+    updated_at = models.DateTimeField(auto_now=True, db_index=True)
+
+    def __str__(self) -> str:
+        return f"{self.key}: {len(self.hits)}"

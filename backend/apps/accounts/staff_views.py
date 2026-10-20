@@ -1,3 +1,4 @@
+from django.db import transaction
 from django.db.models import Q
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_protect
@@ -6,7 +7,6 @@ from drf_spectacular.utils import extend_schema
 from rest_framework import generics, status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
-from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from . import staff
@@ -22,6 +22,7 @@ from .serializers import (
     StaffSerializer,
     StaffUpdateSerializer,
 )
+from .throttling import LockedScopedRateThrottle
 
 STATUS_CHOICES = [("active", "Active"), ("inactive", "Deactivated"), ("pending", "Password not set yet")]
 
@@ -118,11 +119,13 @@ class StaffSetupLinkView(APIView):
         return Response(SetupLinkSerializer(staff.issue_setup_link(request.user, pk)).data, status=status.HTTP_201_CREATED)
 
 
+# Throttled endpoints run outside the request transaction, so a refused attempt's count is kept.
+@method_decorator(transaction.non_atomic_requests, name="dispatch")
 class SetPasswordLinkView(APIView):
     """Check a set-password link before showing the form. Throttled like sign-in."""
 
     permission_classes = [AllowAny]
-    throttle_classes = [ScopedRateThrottle]
+    throttle_classes = [LockedScopedRateThrottle]
     throttle_scope = "set_password"
 
     @extend_schema(responses=SetPasswordLinkSerializer)
@@ -131,10 +134,12 @@ class SetPasswordLinkView(APIView):
 
 
 # Anonymous like login, so DRF wouldn't check CSRF on its own.
+# Outside the request transaction for the throttle; `set_password_from_link` runs its own.
 @method_decorator(csrf_protect, name="dispatch")
+@method_decorator(transaction.non_atomic_requests, name="dispatch")
 class SetPasswordView(APIView):
     permission_classes = [AllowAny]
-    throttle_classes = [ScopedRateThrottle]
+    throttle_classes = [LockedScopedRateThrottle]
     throttle_scope = "set_password"
 
     @extend_schema(request=SetPasswordSerializer, responses={204: None})

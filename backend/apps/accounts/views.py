@@ -1,4 +1,5 @@
 from django.contrib.auth import authenticate, login, logout
+from django.db import transaction
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
 from drf_spectacular.utils import extend_schema
@@ -6,10 +7,10 @@ from rest_framework import status
 from rest_framework.exceptions import APIException
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from .serializers import LoginSerializer, MeSerializer, SessionSerializer
+from .throttling import LockedScopedRateThrottle
 
 
 class InvalidCredentials(APIException):
@@ -33,10 +34,12 @@ class CsrfView(APIView):
 
 # DRF only enforces CSRF for already-authenticated users; enforce it on login too
 # so a third-party site can't log a till into an attacker's account (login CSRF).
+# Outside the request transaction, so a failed sign-in's throttle count isn't rolled back with it.
 @method_decorator(csrf_protect, name="dispatch")
+@method_decorator(transaction.non_atomic_requests, name="dispatch")
 class LoginView(APIView):
     permission_classes = [AllowAny]
-    throttle_classes = [ScopedRateThrottle]
+    throttle_classes = [LockedScopedRateThrottle]
     throttle_scope = "login"
 
     @extend_schema(request=LoginSerializer, responses={200: MeSerializer})

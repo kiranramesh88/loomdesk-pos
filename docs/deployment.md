@@ -8,7 +8,7 @@ browser ──HTTPS──▶ TLS proxy / platform router ──HTTP──▶ Wai
                                                           ├─ /static/…    WhiteNoise: SPA assets, Django admin assets
                                                           ├─ /media/…     uploaded product photos (MEDIA_ROOT)
                                                           └─ everything else → index.html (React routes)
-                                                         PostgreSQL ◀─ two connections: requests (atomic), cache (autocommit)
+                                                         PostgreSQL ◀─ data, sessions and every rate limit
 ```
 
 ## 1. Environment variables
@@ -45,13 +45,14 @@ cd backend
 python -m venv .venv && .venv/bin/pip install -r requirements.txt   # .venv\Scripts\ on Windows
 .venv/bin/python manage.py collectstatic --noinput        # SPA + admin assets → STATIC_ROOT (compressed)
 .venv/bin/python manage.py migrate                        # application tables, default connection
-.venv/bin/python manage.py createcachetable --database cache   # shared cache table (idempotent)
 .venv/bin/python manage.py check --deploy                 # must report no errors
 ```
 
 Restart the server after `collectstatic`. WhiteNoise indexes the static files when the process starts, so a running server answers 404 for the new build's hashed assets, and the pages that name them render blank.
 
-`check --deploy` includes LoomDesk's own checks: the frontend build and collected assets exist (E001, E002), and the cache is shared across workers but outside the request transaction (E003, E004).
+`check --deploy` includes LoomDesk's own checks: the frontend build and collected assets exist (E001, E002).
+
+**Upgrading from a release before Phase 12:** sign-in throttling no longer uses Django's cache, so `createcachetable` is no longer needed. The old `loomdesk_cache` table is unused; drop it by hand once the new release runs, after a backup.
 
 **Migrations:** take a database backup first (`pg_dump -Fc`). Run `migrate` once per release, before the new code takes traffic, from one machine. Every migration so far only adds tables or columns.
 
@@ -95,12 +96,17 @@ waitress-serve --listen=127.0.0.1:8000 --threads=8 --trusted-proxy=127.0.0.1 \
 ```
 
 - Put a TLS-terminating proxy or platform router in front. It must set `X-Forwarded-Proto` and overwrite any value a client sends, because Django uses it to recognise HTTPS (secure cookies, redirects, CSRF).
+- **The proxy flags are required.** Without `--trusted-proxy`, Waitress drops the `X-Forwarded-*` headers: Django never sees HTTPS (so `SECURE_SSL_REDIRECT` redirects forever), and every user shares the proxy's address and its limits.
+  - `--trusted-proxy` is the address the proxy connects from. On a platform whose router address isn't fixed (Render, Railway, Fly.io, most PaaS), use `--trusted-proxy='*' --trusted-proxy-count=1`, and only if the service is reachable solely through that router.
+  - `--trusted-proxy-count=1` takes the client address the router appended and ignores anything the client wrote before it, so a forged `X-Forwarded-For` doesn't make a new client.
+  - Bind to `0.0.0.0:$PORT` (the platform's port) on a PaaS, rather than `127.0.0.1:8000`.
 - **Workers and instances:** every limit below is stored in PostgreSQL, so it holds across threads, processes and instances.
   - **Approval PIN:** 5 wrong PINs per approver, then that PIN is locked until 15 minutes after the last one.
   - **Django admin sign-in:** 5 failures per account and 10 per client address in 15 minutes. A locked-out attempt gets status 429 and its password isn't checked.
   - These two count in `AttemptGuard` rows (`apps/accounts/attempts.py`). Each attempt is counted under a row lock, and committed, before the secret is checked. However many attempts arrive at once, no more than the limit are checked. A request that fails later can't roll its count back.
-  - **API sign-in:** throttled to 10 attempts a minute per client by DRF, in the shared database cache. The cache has its own autocommitting connection: on the request's connection, the rollback of an error response would erase the very attempts being counted.
-- **Client address:** the address limits use the address Django sees. Behind a proxy, configure `--trusted-proxy` correctly, or every user shares the proxy's address and its limits.
+  - **API sign-in and set-password links:** 10 requests a minute per client address each (`DEFAULT_THROTTLE_RATES`). They count in `ThrottleWindow` rows (`apps/accounts/throttling.py`): a sliding window read and written under a row lock in its own committed transaction, so a burst from one client gets exactly 10 through, across every worker. A refusal is 429 with `Retry-After`.
+- **Client address:** the address limits use `REMOTE_ADDR`, never `X-Forwarded-For` directly. Behind a proxy, Waitress sets it from the proxies it trusts (above).
+- **Housekeeping:** run `python manage.py clearsessions` daily (a cron job or scheduled task) so expired sessions don't pile up. Idle throttle rows delete themselves after a day.
 
 ## 7. Content-Security-Policy
 
@@ -129,7 +135,6 @@ waitress-serve --listen=127.0.0.1:8000 --threads=8 --trusted-proxy=127.0.0.1 \
 
 ## 9. Known limits
 
-- **API sign-in throttling** uses DRF's throttle. It reads, then writes, its history in the cache, so simultaneous attempts from one client can slightly exceed 10 a minute. The approval PIN and the Django admin use the row-locked counter instead.
 - **Account lockouts can be triggered by anyone who knows the address.**
   - Five wrong admin sign-ins lock that account's `/django-admin/` access for 15 minutes; the POS sign-in is unaffected.
   - Five wrong PINs lock that approver's discount approvals for 15 minutes.

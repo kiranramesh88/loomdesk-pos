@@ -1,5 +1,5 @@
-"""Production configuration: settings that refuse to start without real values, error pages,
-cache routing and the deployment checks."""
+"""Production configuration: settings that refuse to start without real values, error pages and the
+deployment checks."""
 
 import json
 import os
@@ -12,7 +12,6 @@ from django.test import RequestFactory
 
 from apps.store import checks
 from config import exceptions
-from config.routers import CacheRouter
 
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GOOD_ENV = {
@@ -31,8 +30,6 @@ print(json.dumps({
     "debug": settings.DEBUG,
     "hosts": settings.ALLOWED_HOSTS,
     "db": {a: {"name": d["NAME"], "atomic": d["ATOMIC_REQUESTS"]} for a, d in settings.DATABASES.items()},
-    "routers": settings.DATABASE_ROUTERS,
-    "cache": settings.CACHES["default"]["BACKEND"],
     "secure": [settings.SESSION_COOKIE_SECURE, settings.CSRF_COOKIE_SECURE, settings.SECURE_SSL_REDIRECT],
     "hsts": settings.SECURE_HSTS_SECONDS,
     "whitenoise": "whitenoise.middleware.WhiteNoiseMiddleware" in settings.MIDDLEWARE,
@@ -74,11 +71,8 @@ def test_production_settings_load_from_the_environment():
     assert values["csp"] == [True, False]  # enforced unless DJANGO_CSP_REPORT_ONLY is set
     assert values["admin"] is True
     assert values["schema"] == ["apps.accounts.permissions.IsAdmin"]
-    # The cache has its own autocommitting connection to the same database.
-    assert values["cache"].endswith("DatabaseCache")
-    assert values["routers"] == ["config.routers.CacheRouter"]
-    assert values["db"]["default"] == {"name": "loomdesk_prod", "atomic": True}
-    assert values["db"]["cache"] == {"name": "loomdesk_prod", "atomic": False}
+    # One connection per worker: the limits count in row-locked tables, not a cache on a second connection.
+    assert values["db"] == {"default": {"name": "loomdesk_prod", "atomic": True}}
 
 
 @pytest.mark.parametrize(
@@ -97,25 +91,6 @@ def test_production_settings_refuse_to_start_without_real_values(overrides, mess
     result = load_prod_settings(**overrides)
     assert result.returncode != 0
     assert message in result.stderr
-
-
-def test_cache_router_keeps_the_cache_table_on_its_own_connection():
-    class CacheEntry:
-        class _meta:
-            app_label = "django_cache"
-
-    class Sale:
-        class _meta:
-            app_label = "sales"
-
-    router = CacheRouter()
-    assert router.db_for_write(CacheEntry) == "cache"
-    assert router.db_for_read(CacheEntry) == "cache"
-    assert router.db_for_write(Sale) is None
-    assert router.allow_migrate("cache", "django_cache") is True
-    assert router.allow_migrate("default", "django_cache") is False
-    assert router.allow_migrate("cache", "sales") is False
-    assert router.allow_migrate("default", "sales") is True
 
 
 def test_unknown_api_paths_answer_in_the_error_envelope(client):
@@ -159,18 +134,8 @@ def test_deploy_check_needs_the_frontend_build_and_collected_assets(settings, tm
     assert checks.frontend_build_check(None) == []
 
 
-def test_deploy_check_rejects_a_per_process_cache(settings):
-    settings.CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
-    assert _ids(checks.shared_cache_check(None)) == {"loomdesk.E003"}
-
-
-def test_deploy_check_rejects_a_database_cache_inside_the_request_transaction(settings):
-    # Without the router the cache table sits on "default", whose requests are atomic.
-    settings.CACHES = {"default": {"BACKEND": "django.core.cache.backends.db.DatabaseCache", "LOCATION": "t"}}
-    assert _ids(checks.shared_cache_check(None)) == {"loomdesk.E004"}
-
-
-def test_deploy_checks_are_registered():
+def test_deploy_checks_are_registered(settings, tmp_path):
+    settings.FRONTEND_DIST_DIR = tmp_path / "dist"
+    settings.STATIC_ROOT = tmp_path / "static"
     ids = _ids(run_checks(include_deployment_checks=True))
-    # The test settings have no build and a per-process cache, which the deploy checks must catch.
-    assert {"loomdesk.E003"} <= ids
+    assert {"loomdesk.E001", "loomdesk.E002"} <= ids

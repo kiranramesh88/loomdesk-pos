@@ -51,13 +51,9 @@ DATABASES = {
     }
 }
 
-# --- Shared cache: login throttling must count across every worker and instance (the approval-PIN and
-# Django admin limits use row-locked database rows instead, apps/accounts/attempts.py). The database cache needs no extra service. It gets its own autocommitting connection to the
-# same database (config/routers.py explains why); create its table with
-# `createcachetable --database cache`.
-DATABASES["cache"] = {**DATABASES["default"], "ATOMIC_REQUESTS": False}
-DATABASE_ROUTERS = ["config.routers.CacheRouter"]
-CACHES = {"default": {"BACKEND": "django.core.cache.backends.db.DatabaseCache", "LOCATION": "loomdesk_cache"}}
+# Every limit (sign-in and set-password throttles, approval PINs, Django admin sign-in) counts in
+# row-locked PostgreSQL rows (apps/accounts/throttling.py, attempts.py), shared by every worker and
+# instance. Nothing relies on Django's cache, so the default per-process cache is enough.
 
 # --- HTTPS. TLS ends at the proxy or platform in front of the app, which must set X-Forwarded-Proto
 # (and overwrite any value a client sends).
