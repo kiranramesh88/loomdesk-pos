@@ -1,4 +1,5 @@
 import { Printer } from 'lucide-react'
+import { Link } from 'react-router'
 
 import { ButtonLink } from '@/components/ui/ButtonLink'
 import { Card, CardHeader } from '@/components/ui/Card'
@@ -54,7 +55,15 @@ function Bill({ sale }: { sale: Sale }) {
             </MobileFact>
             {sale.returns.length > 0 && (
               <MobileFact label="Returns">
-                {sale.returns.map((r) => r.number).join(', ')} · {formatMoney(sale.refunded_paise)} refunded
+                {sale.returns.map((r, i) => (
+                  <span key={r.number}>
+                    {i > 0 && ', '}
+                    <Link to={mobilePath(`returns/${r.number}`)} className="tabular font-strong text-primary hover:underline">
+                      {r.number}
+                    </Link>
+                  </span>
+                ))}{' '}
+                · {formatMoney(sale.refunded_paise)} refunded
               </MobileFact>
             )}
             <MobileFact label="Date & time">{formatSaleTime(sale.created_at)}</MobileFact>

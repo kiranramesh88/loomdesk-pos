@@ -80,6 +80,46 @@ type Handler = (url: URL, method: string, body: unknown) => Response | undefined
 const page = <T,>(results: T[], count = results.length) => ({ count, next: null, previous: null, results })
 const error = (status: number, code: string, detail: string) => jsonResponse(status, { detail, code, fields: {} })
 
+const RETURN = {
+  number: 'RET-000003', created_at: '2026-10-20T10:45:00Z', created_by_name: 'Kiran Ramesh', invoice_no: 'LD-000042',
+  sale_created_at: '2026-10-20T10:30:00Z', reason: 'size_fit', note: '', subtotal_paise: 47620, discount_paise: 0,
+  taxable_paise: 47620, tax_paise: 2380, total_paise: 50000,
+  lines: [
+    {
+      id: 1, sale_line: 7, variant: 31, product_name: 'Classic Cotton Shirt', variant_sku: 'SH-CT-001-M', size: 'M', colour: 'Blue',
+      sold_quantity: 2, quantity: 1, disposition: 'inspection', subtotal_paise: 47620, discount_paise: 0, taxable_paise: 47620,
+      tax_paise: 2380, total_paise: 50000,
+    },
+  ],
+  refund: { method: 'upi', amount_paise: 50000, reference: 'UPI123', gateway_verified: false, recorded_at: '2026-10-20T10:45:00Z', recorded_by_name: 'Kiran Ramesh' },
+}
+const RETURN_ROW = {
+  number: 'RET-000003', created_at: '2026-10-20T10:45:00Z', invoice_no: 'LD-000042', reason: 'size_fit', units: 1, total_paise: 50000,
+  refund_method: 'upi', dispositions: ['inspection'], created_by_name: 'Kiran Ramesh',
+}
+const STAFF = {
+  id: 4, email: 'anjali@loomlinen.demo', full_name: 'Anjali Prakash', initials: 'AP', role: 'senior_cashier', is_active: true, has_pin: true,
+  password_set: true, setup_link_issued_at: null, last_login: null, date_joined: '2026-10-01T09:00:00Z',
+}
+const REPORT = {
+  key: 'returns', title: 'Returns & refunds', description: 'Every return in the dates.', uses_dates: true,
+  period: { date_from: '2026-09-21', date_to: TODAY }, generated_at: '2026-10-20T11:00:00Z',
+  filters: [{ key: 'reason', label: 'Reason', options: [{ value: 'size_fit', label: 'Size or fit' }] }], applied: {},
+  summary: [{ key: 'refunds', label: 'Refunds', value: 50000, kind: 'money' }],
+  columns: [
+    { key: 'number', label: 'Return', kind: 'reference' },
+    { key: 'invoice_no', label: 'Bill', kind: 'reference' },
+    { key: 'refund', label: 'Refund', kind: 'money' },
+  ],
+  rows: [{ number: 'RET-000003', invoice_no: 'LD-000042', refund: 50000 }],
+  trend: null, truncated: false, definitions: [{ term: 'Refunds', meaning: 'Money given back on returns.' }],
+}
+const SETTINGS = {
+  name: 'Loom & Linen', code: 'LL-KKD-01', address: 'Beach Road, Kozhikode', state: 'Kerala', gstin: '', prices_include_tax: false,
+  cashier_discount_limit_pct: 10, states: ['Kerala'],
+}
+const RULE = { id: 1, name: 'Garments', kind: 'price_band', flat_rate_bp: null, threshold_paise: 250000, lower_rate_bp: 500, upper_rate_bp: 1800, summary: '5% up to ₹2,500 per unit, 18% above' }
+
 function mockApi({ me = ME_ADMIN as unknown, handler = (() => undefined) as Handler } = {}) {
   document.cookie = 'csrftoken=t'
   const calls: Call[] = []
@@ -108,6 +148,15 @@ function mockApi({ me = ME_ADMIN as unknown, handler = (() => undefined) as Hand
     if (path.endsWith('/suppliers/1/purchases/')) return jsonResponse(200, page([PURCHASE_ROW]))
     if (path.endsWith('/suppliers/1/payments/')) return jsonResponse(200, page([PAYMENT]))
     if (path.endsWith('/suppliers/1/statement/')) return jsonResponse(200, { balance_paise: 0, entries: [] })
+    if (path.endsWith('/reports/returns/')) return jsonResponse(200, REPORT)
+    if (path.endsWith('/returns/')) return jsonResponse(200, page([RETURN_ROW]))
+    if (path.endsWith('/returns/RET-000003/')) return jsonResponse(200, RETURN)
+    if (path.endsWith('/staff/')) return jsonResponse(200, page([STAFF]))
+    if (path.endsWith('/staff/4/')) return jsonResponse(200, STAFF)
+    if (path.endsWith('/api/v1/reports/')) return jsonResponse(200, [{ key: 'returns', title: 'Returns & refunds', description: 'Every return in the dates.', uses_dates: true }])
+    if (path.endsWith('/store/settings/')) return jsonResponse(200, SETTINGS)
+    if (path.endsWith('/catalog/tax-rules/')) return jsonResponse(200, [RULE])
+    if (path.endsWith('/catalog/categories/')) return jsonResponse(200, [{ id: 1, name: 'Shirts', hsn_code: '6205', tax_rule: RULE }])
     throw new Error(`Unexpected ${method} ${path}`)
   })
   return calls
@@ -300,7 +349,8 @@ describe('mobile bills', () => {
     expect(screen.getByText(/Rang up twice/)).toBeInTheDocument()
     expect(screen.getByText('Voided')).toBeInTheDocument()
     expect(screen.getByText('Partly returned')).toBeInTheDocument()
-    expect(screen.getByText('RET-000003 · ₹500.00 refunded')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'RET-000003' })).toHaveAttribute('href', '/admin/mobile/returns/RET-000003')
+    expect(screen.getByText(/₹500.00 refunded/)).toBeInTheDocument()
   })
 
   it('shows a missing bill as not found', async () => {
@@ -365,5 +415,60 @@ describe('mobile suppliers', () => {
     expect(payments).toHaveTextContent('Not verified')
     expect(screen.getByText('Not bank-verified')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Call' })).toHaveAttribute('href', 'tel:+919876512001')
+  })
+})
+
+describe('mobile returns, staff, reports and settings', () => {
+  it('lists every section on More, with no placeholder text', async () => {
+    mockApi()
+    renderRoutes(routes, '/admin/mobile/more')
+    const sections = await screen.findByRole('list', { name: 'Sections' })
+    const hrefs = within(sections).getAllByRole('link').map((l) => l.getAttribute('href'))
+    expect(hrefs).toEqual(expect.arrayContaining(['/admin/mobile/returns', '/admin/mobile/reports', '/admin/mobile/staff', '/admin/mobile/settings']))
+    expect(screen.queryByText(/aren’t built yet/)).not.toBeInTheDocument()
+  })
+
+  it('shows a return read-only, with a manually recorded refund and the inspection hold', async () => {
+    const calls = mockApi()
+    renderRoutes(routes, '/admin/mobile/returns')
+    await userEvent.click(await screen.findByRole('link', { name: /RET-000003/ }))
+    expect(await screen.findByRole('heading', { level: 1, name: 'Return RET-000003' })).toBeInTheDocument()
+    expect(await screen.findByText('Manually recorded')).toBeInTheDocument()
+    expect(screen.getByText('Items on inspection hold')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'LD-000042' })).toHaveAttribute('href', '/admin/mobile/bills/LD-000042')
+    expect(within(await bottomNav()).getByRole('link', { name: 'More' })).toHaveAttribute('aria-current', 'page')
+    expect(writes(calls)).toHaveLength(0)
+  })
+
+  it('shows staff read-only and sends changes to the full admin', async () => {
+    mockApi()
+    renderRoutes(routes, '/admin/mobile/staff')
+    await userEvent.click(await screen.findByRole('link', { name: /Anjali Prakash/ }))
+    expect(await screen.findByRole('heading', { level: 1, name: 'Anjali Prakash' })).toBeInTheDocument()
+    expect(screen.getByText('Senior cashier')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Manage in full admin' })).toHaveAttribute('href', '/admin/staff/4')
+    expect(within(screen.getByRole('main')).queryByRole('button')).not.toBeInTheDocument()
+  })
+
+  it('shows a report as stacked rows with mobile links and a CSV export', async () => {
+    mockApi()
+    renderRoutes(routes, '/admin/mobile/reports')
+    await userEvent.click(await screen.findByRole('link', { name: /Returns & refunds/ }))
+    expect(await screen.findByRole('heading', { level: 1, name: 'Returns & refunds' })).toBeInTheDocument()
+    const details = await screen.findByRole('list', { name: 'Details' })
+    expect(within(details).getByRole('link', { name: 'RET-000003' })).toHaveAttribute('href', '/admin/mobile/returns/RET-000003')
+    expect(within(details).getByRole('link', { name: 'LD-000042' })).toHaveAttribute('href', '/admin/mobile/bills/LD-000042')
+    expect(screen.getByRole('link', { name: 'Export CSV' })).toHaveAttribute('href', '/api/v1/reports/returns/export/')
+    expect(screen.getByText('Money given back on returns.')).toBeInTheDocument()
+  })
+
+  it('shows the settings read-only', async () => {
+    mockApi()
+    renderRoutes(routes, '/admin/mobile/settings')
+    expect(await screen.findByText('Beach Road, Kozhikode')).toBeInTheDocument()
+    expect(screen.getByText('Exclude GST; added at checkout')).toBeInTheDocument()
+    expect(await screen.findByText('5% up to ₹2,500 per unit, 18% above')).toBeInTheDocument()
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Edit in full admin' })).toHaveAttribute('href', '/admin/settings')
   })
 })

@@ -25,7 +25,7 @@ import type { PaymentMethod, ReturnableLine, ReturnableSale, ReturnDisposition, 
 import { useCreateReturn, useReturnableSale, useReturnQuote } from '../api'
 import { DISPOSITION_LABELS, formatSaleTime, isManuallyRecorded, PAYMENT_LABELS, REASON_LABELS, REASONS, unitsLabel } from '../labels'
 import { DISPOSITIONS } from '../returnParams'
-import { RefundTotals } from './ReturnDetailPage'
+import { RefundTotals } from '../components/RefundTotals'
 
 const DISPOSITION_OPTIONS: SelectOption[] = DISPOSITIONS.map((d) => ({ value: d, label: DISPOSITION_LABELS[d].label }))
 const REASON_OPTIONS: SelectOption[] = REASONS.map((r) => ({ value: r, label: REASON_LABELS[r] }))

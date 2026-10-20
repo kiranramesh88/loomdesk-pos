@@ -1,4 +1,17 @@
-import { Boxes, ClipboardList, History, LayoutDashboard, Menu, ReceiptText, Truck, type LucideIcon } from 'lucide-react'
+import {
+  ArrowLeftRight,
+  Boxes,
+  ChartColumn,
+  ClipboardList,
+  History,
+  LayoutDashboard,
+  Menu,
+  ReceiptText,
+  Settings,
+  Truck,
+  Users,
+  type LucideIcon,
+} from 'lucide-react'
 
 export type MobileTab = 'overview' | 'inventory' | 'bills' | 'more'
 
@@ -44,4 +57,8 @@ export const MOBILE_MORE: readonly MobileMoreItem[] = [
   { label: 'Suppliers', description: 'Contacts, purchases, payments and statements.', icon: Truck, to: mobilePath('suppliers') },
   { label: 'Purchases', description: 'Goods awaiting delivery, and receiving them into stock.', icon: ClipboardList, to: mobilePath('purchases') },
   { label: 'Stock movements', description: 'Every stock change, with its reason and who made it.', icon: History, to: mobilePath('inventory/movements') },
+  { label: 'Returns', description: 'Returned items, refunds and where the items went.', icon: ArrowLeftRight, to: mobilePath('returns') },
+  { label: 'Reports', description: 'Sales, refunds, tax, stock and activity, with CSV export.', icon: ChartColumn, to: mobilePath('reports') },
+  { label: 'Staff & access', description: 'Accounts, roles and approval PINs.', icon: Users, to: mobilePath('staff') },
+  { label: 'Settings', description: 'Store details, pricing rules and GST rules.', icon: Settings, to: mobilePath('settings') },
 ]

@@ -42,7 +42,7 @@ function DestinationList({ label, items }: { label: string; items: readonly Dest
 export function MobileMorePage() {
   return (
     <>
-      <MobilePageHeader title="More" description="Suppliers, purchasing and stock history." />
+      <MobilePageHeader title="More" description="Suppliers, returns, reports, staff and settings." />
       <div className="grid gap-4">
         <MobilePanel title="Sections">
           <DestinationList label="Sections" items={MOBILE_MORE} />
@@ -50,9 +50,6 @@ export function MobileMorePage() {
         <MobilePanel title="Elsewhere in LoomDesk">
           <DestinationList label="Elsewhere in LoomDesk" items={ELSEWHERE} />
         </MobilePanel>
-        <p className="px-1 type-helper">
-          Returns, staff accounts, reports and settings aren’t built yet, on desktop or mobile. They’ll be listed here when they are.
-        </p>
       </div>
     </>
   )

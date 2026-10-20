@@ -92,5 +92,55 @@ export const mobileRoutes: RouteObject[] = [
       },
     ],
   },
+  {
+    path: 'returns',
+    children: [
+      {
+        index: true,
+        handle: handle('Returns', 'more'),
+        lazy: async () => ({ Component: (await import('@/features/returns/mobile/MobileReturnsPage')).MobileReturnsPage }),
+      },
+      {
+        path: ':returnNo',
+        handle: handle('Return', 'more'),
+        lazy: async () => ({ Component: (await import('@/features/returns/mobile/MobileReturnPage')).MobileReturnPage }),
+      },
+    ],
+  },
+  {
+    path: 'staff',
+    children: [
+      {
+        index: true,
+        handle: handle('Staff & access', 'more'),
+        lazy: async () => ({ Component: (await import('@/features/staff/mobile/MobileStaffPage')).MobileStaffPage }),
+      },
+      {
+        path: ':staffId',
+        handle: handle('Staff account', 'more'),
+        lazy: async () => ({ Component: (await import('@/features/staff/mobile/MobileStaffMemberPage')).MobileStaffMemberPage }),
+      },
+    ],
+  },
+  {
+    path: 'reports',
+    children: [
+      {
+        index: true,
+        handle: handle('Reports', 'more'),
+        lazy: async () => ({ Component: (await import('@/features/reports/mobile/MobileReportsPage')).MobileReportsPage }),
+      },
+      {
+        path: ':reportKey',
+        handle: handle('Report', 'more'),
+        lazy: async () => ({ Component: (await import('@/features/reports/mobile/MobileReportPage')).MobileReportPage }),
+      },
+    ],
+  },
+  {
+    path: 'settings',
+    handle: handle('Settings', 'more'),
+    lazy: async () => ({ Component: (await import('@/features/settings/mobile/MobileSettingsPage')).MobileSettingsPage }),
+  },
   { path: '*', element: <MobileNotFound />, handle: handle('Page not found', 'more') },
 ]
