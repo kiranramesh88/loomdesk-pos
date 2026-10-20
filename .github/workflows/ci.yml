@@ -1,0 +1,80 @@
+# Tests and the production image on every push. Builds the image only; it never pushes or deploys it.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: loomdesk_ci
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: loomdesk
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U loomdesk_ci" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      # A throwaway CI database; the tests create and drop test_loomdesk in it.
+      POSTGRES_DB: loomdesk
+      POSTGRES_USER: loomdesk_ci
+      POSTGRES_PASSWORD: ci-only-password
+      POSTGRES_HOST: localhost
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: backend/.python-version
+      - run: pip install -r requirements-dev.txt
+      - name: Tests on PostgreSQL, including the concurrency tests
+        run: python -m pytest -q
+      - name: No missing migrations
+        run: python manage.py makemigrations --check --dry-run
+      - name: The committed API schema is current
+        run: |
+          python manage.py spectacular --file /tmp/schema.yml --validate
+          diff -u schema.yml /tmp/schema.yml
+
+  frontend:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npx vitest run --maxWorkers=4
+      - run: npm run build
+
+  image:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the production image
+        run: docker build -t loomdesk:ci .
+      - name: The image holds no local secrets or data
+        run: |
+          docker run --rm --entrypoint sh loomdesk:ci -c '
+            ! find /app \( -name ".env" -o -name "*.sqlite3" -o -name "*.dump" \) | grep . &&
+            test -f /app/frontend/dist/index.html &&
+            ls /app/backend/staticfiles/assets | grep -q "\.js$"'
+      - name: The start script refuses to run without the proxy setting
+        run: |
+          ! docker run --rm -e DJANGO_SECRET_KEY=x -e DJANGO_ALLOWED_HOSTS=x loomdesk:ci 2>err.txt
+          grep -q "WAITRESS_TRUSTED_PROXY" err.txt

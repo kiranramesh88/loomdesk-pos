@@ -1,6 +1,6 @@
 # Deploying LoomDesk
 
-LoomDesk is one Django process that serves the API, the built React app and uploaded photos, backed by PostgreSQL. It needs no other services. This guide is host-agnostic: any Linux or Windows host, VM or platform that can run Python 3.13 and reach PostgreSQL will do.
+LoomDesk is one Django process that serves the API, the built React app and uploaded photos, backed by PostgreSQL. It needs no other services. This guide is host-agnostic: any Linux or Windows host, VM or platform that can run Python 3.13 and reach PostgreSQL will do. The repository's `Dockerfile` builds a ready image (section 2), and section 10 is the configuration prepared for Render.
 
 ```
 browser ──HTTPS──▶ TLS proxy / platform router ──HTTP──▶ Waitress ─▶ Django
@@ -32,6 +32,8 @@ Set these in the host's secret manager or service environment. **Production neve
 | `DJANGO_SERVE_MEDIA` | no | Default `true`. Set `false` when the proxy or a CDN serves `/media/`. |
 | `DJANGO_LOG_LEVEL` | no | Default `INFO`. Logs go to stdout/stderr. |
 | `DJANGO_CSP_REPORT_ONLY` | no | Default `false`. `true` sends the Content-Security-Policy as report-only, so violations show in the browser console without blocking anything (section 7). |
+| `WAITRESS_TRUSTED_PROXY` | yes, for the image | The address the proxy connects from, or `*` behind a platform router (section 6). `deploy/start.sh` refuses to start without it. |
+| `PORT`, `WAITRESS_THREADS` | no | For the image: the port to listen on (default `8000`; platforms set it) and Waitress threads (default `8`). |
 
 Never set `DB_ENGINE` in production (the settings refuse `sqlite`), and never set `SEED_DEMO_PASSWORD`.
 
@@ -47,6 +49,14 @@ python -m venv .venv && .venv/bin/pip install -r requirements.txt   # .venv\Scri
 .venv/bin/python manage.py migrate                        # application tables, default connection
 .venv/bin/python manage.py check --deploy                 # must report no errors
 ```
+
+**With Docker:** `docker build -t loomdesk .` from the repository root does all of the above except `migrate`, `check --deploy` and starting the server:
+- The first stage installs the frontend with `npm ci` and builds it; the second installs the pinned `backend/requirements.txt` on Python 3.13.
+- `collectstatic` runs during the build with placeholder settings. It opens no database connection, and none of those values exist at runtime.
+- `.dockerignore` keeps `.env` files, databases, dumps, media, `node_modules` and local builds out of the image. `.gitattributes` keeps the shell scripts' LF line endings in a Windows checkout.
+- The container runs `deploy/start.sh`: it gives the media disk to the unprivileged `loomdesk` user, runs `check --deploy` (fails on errors only), deletes expired sessions, and starts Waitress as that user on `0.0.0.0:$PORT` with the proxy flags.
+- Run `python manage.py migrate --noinput` from the image once per release, before it takes traffic (on Render, the pre-deploy command).
+- One-off commands that write media run as the app user: `sh /app/deploy/as_app.sh python manage.py …`.
 
 Restart the server after `collectstatic`. WhiteNoise indexes the static files when the process starts, so a running server answers 404 for the new build's hashed assets, and the pages that name them render blank.
 
@@ -152,3 +162,62 @@ waitress-serve --listen=127.0.0.1:8000 --threads=8 --trusted-proxy=127.0.0.1 \
 - **Reports** are an operational view of LoomDesk's own records, not a GST filing or double-entry accounts. A report stops at 5,000 rows; choose fewer dates for the rest.
 - **One register.** There's no per-till setup or cash-drawer reconciliation.
 - **The audit trail** is append-only through the application. Someone with direct database access can still change it.
+
+## 10. Render (prepared, not deployed)
+
+`render.yaml` is a Render Blueprint for this guide's setup, validated against Render's published schema. **Applying it creates paid resources.** Nothing has been created yet.
+
+| Resource | Setting |
+|---|---|
+| Web service `loomdesk` | Docker (`./Dockerfile`, context `.`), plan **Starter** (512 MB, 0.5 CPU), region **Singapore**, auto-deploy off |
+| Pre-deploy command | `python manage.py migrate --noinput` |
+| Health check | `/api/v1/auth/session/`. Render checks over plain HTTP, so it gets the 301 to HTTPS, which Render counts as healthy. |
+| Disk `media` | 1 GB at `/var/data`. Photos go to `/var/data/media`. Snapshotted daily and kept 7 days. A disk means one instance, and a few seconds of downtime per deploy. |
+| Database `loomdesk-db` | Render Postgres **Basic-256mb**, 1 GB storage, PostgreSQL 18, Singapore, database `loomdesk`, user `loomdesk_app`, no internet access (`ipAllowList: []`) |
+| Environment | `DJANGO_SECRET_KEY` (pasted, at least 50 characters: Render's `generateValue` gives 44), `WAITRESS_TRUSTED_PROXY=*`, `DJANGO_SECURE_HSTS_SECONDS=3600` for the first deploy, `POSTGRES_HOST/PORT/DB/USER/PASSWORD` from the database. `DJANGO_ALLOWED_HOSTS` falls back to Render's `RENDER_EXTERNAL_HOSTNAME`. |
+
+**Steps to a public URL**, once the price is approved:
+1. Push the repository to a private GitHub repository; CI (`.github/workflows/ci.yml`) runs the tests and builds the image there.
+2. In Render: **New → Blueprint**, connect the repository, review the two resources and their prices, and paste `DJANGO_SECRET_KEY` when asked. Make it with `python -c "import secrets; print(secrets.token_urlsafe(64))"`.
+3. **Deploy** the web service by hand. The pre-deploy command creates the tables.
+4. Open the service's **Shell** and set up the store:
+   ```sh
+   python manage.py setup_store --name "…" --code "…" --address "…" --state Kerala   # add --gstin for a real store
+   sh /app/deploy/as_app.sh python manage.py fetch_seed_photos      # optional: the demo photos (Unsplash)
+   sh /app/deploy/as_app.sh python manage.py load_demo_catalogue    # demo products, stock and suppliers; no accounts
+   python manage.py create_staff --email … --name "…" --role admin   # prompts for the password
+   ```
+5. Run the smoke test (section 8) against `https://<service>.onrender.com`. Then raise `DJANGO_SECURE_HSTS_SECONDS` to `31536000`.
+
+**Demo data and reviewer accounts:**
+- `load_demo_catalogue` loads the demo products, variants, opening stock and suppliers. It creates no users, passwords or PINs, and it refuses a store that already has products, stock movements, suppliers, purchases or sales. It never replaces anything.
+- `seed_demo` still refuses production settings: its accounts share a published password.
+- Create each reviewer account with `create_staff`. It prompts for the password twice and rejects the demo password and weak ones.
+  - An admin account and a cashier account show both sides of the app.
+  - Give each its own long random password, and send credentials privately, never in the repository or the README.
+  - Set an admin's discount-approval PIN on the Staff page, or with `--pin-env`.
+- After the review, deactivate the reviewer accounts on the Staff page (history is kept), or change their passwords.
+
+**Expected monthly cost** (published prices, October 2026; Render changed its prices in August 2026, so confirm on the Blueprint's review screen):
+
+| Item | Price |
+|---|---|
+| Web service, Starter | $7 |
+| Postgres Basic-256mb | $6 |
+| Postgres storage, 1 GB | about $0.30 |
+| Disk, 1 GB | about $0.25 |
+| **Total** | **about $13.55 a month, plus tax** |
+
+- **Likely extras:**
+  - Outbound bandwidth beyond the workspace's included amount.
+  - A paid workspace plan, if the account isn't on Hobby.
+  - Growing the database or disk; storage can grow but not shrink.
+- **Not needed:** Render cron jobs (expired sessions are cleared at each start) and Key Value (no cache is used).
+- **Charges stop when the resources are deleted.** Deleting the database deletes its data and backups.
+
+**Backups:**
+- **Postgres:** point-in-time recovery for the last 3 days on the Hobby workspace (7 on Pro), and logical backups kept 7 days.
+- **Photos:** the disk's daily snapshots.
+- **Your own copy:** the image has no PostgreSQL client tools. Before a risky change, download a logical backup from the database's Recovery page in the dashboard.
+  - Or allow your own address in the database's access control for a moment, and run `pg_dump -Fc` from Windows (`C:\Program Files\PostgreSQL\18\bin\pg_dump.exe`) with the external connection string. Remove the address afterwards.
+  - Test a restore into a separate database.

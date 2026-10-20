@@ -1,0 +1,53 @@
+# Render Blueprint for LoomDesk: one Docker web service with a disk for product photos, and PostgreSQL.
+# Applying it (Dashboard → New → Blueprint) creates paid resources; see docs/deployment.md §10 first.
+# Schema: https://render.com/schema/render.yaml.json
+
+services:
+  - type: web
+    name: loomdesk
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter            # 512 MB, 0.5 CPU; a disk needs a paid instance
+    region: singapore        # nearest Render region to India; the database must be in the same one
+    autoDeployTrigger: "off" # deploy by hand from the dashboard while validating
+    preDeployCommand: python manage.py migrate --noinput
+    # Over plain HTTP this answers 301 to HTTPS, which Render counts as healthy.
+    healthCheckPath: /api/v1/auth/session/
+    disk:
+      name: media
+      mountPath: /var/data   # DJANGO_MEDIA_ROOT is /var/data/media (set in the Dockerfile)
+      sizeGB: 1
+    envVars:
+      # At least 50 characters, so not `generateValue` (Render's are 44). Paste one made with
+      # python -c "import secrets; print(secrets.token_urlsafe(64))"
+      - key: DJANGO_SECRET_KEY
+        sync: false
+      # Render's router is the only way in, so trust the one hop it adds (docs/deployment.md §6).
+      - key: WAITRESS_TRUSTED_PROXY
+        value: "*"
+      # Raise to 31536000 once HTTPS is proven on the final hostname.
+      - key: DJANGO_SECURE_HSTS_SECONDS
+        value: "3600"
+      # DJANGO_ALLOWED_HOSTS defaults to the service's onrender.com hostname (deploy/start.sh).
+      # Add it here, comma-separated, only for a custom domain.
+      - key: POSTGRES_HOST
+        fromDatabase: { name: loomdesk-db, property: host }
+      - key: POSTGRES_PORT
+        fromDatabase: { name: loomdesk-db, property: port }
+      - key: POSTGRES_DB
+        fromDatabase: { name: loomdesk-db, property: database }
+      - key: POSTGRES_USER
+        fromDatabase: { name: loomdesk-db, property: user }
+      - key: POSTGRES_PASSWORD
+        fromDatabase: { name: loomdesk-db, property: password }
+
+databases:
+  - name: loomdesk-db
+    plan: basic-256mb
+    diskSizeGB: 1            # can grow later, never shrink
+    region: singapore
+    postgresMajorVersion: "18"
+    databaseName: loomdesk
+    user: loomdesk_app
+    ipAllowList: []          # no access from the internet; only the web service, over Render's private network

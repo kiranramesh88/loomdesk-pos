@@ -1367,6 +1367,36 @@ Scope set by the user: fix the API sign-in throttling race, review deployment re
 
 **Validation:** 513 backend tests pass on PostgreSQL; on SQLite, 499 pass and 14 are skipped (PostgreSQL-only). `makemigrations --check` is clean and the schema is unchanged.
 
+**12.2 Deployment files** (the user's decisions D1–D6: Render preferred once the price is approved; a private GitHub repository the user creates; demo data with no accounts; Docker, start script, pinned dependencies and README approved; the old cache table stays; the brief is still unavailable).
+- **Image (`Dockerfile`, `.dockerignore`, `.gitattributes`):**
+  - Node 22 builds the SPA, and Python 3.13 installs the pinned backend.
+  - `collectstatic` runs at build time with placeholder settings; it opens no database connection.
+  - It runs as the unprivileged `loomdesk` user.
+  - Local data and secrets are excluded, and the scripts keep LF endings.
+- **`deploy/start.sh`:**
+  - It refuses to start without `WAITRESS_TRUSTED_PROXY`.
+  - It gives the mounted media disk to the app user, runs `check --deploy` (errors only) and `clearsessions`.
+  - It starts Waitress on `0.0.0.0:$PORT` with the proxy flags, through `deploy/as_app.sh`. That helper also runs one-off commands as the app user.
+  - On Render, `DJANGO_ALLOWED_HOSTS` falls back to `RENDER_EXTERNAL_HOSTNAME`.
+- **Pinned dependencies:** `requirements.txt` and `requirements-dev.txt` list exact versions, transitive ones included. They match the tested environment exactly; a fresh venv installed from them gives an identical `pip freeze`, and `pip check` is clean. `.python-version` is 3.13.
+- **`load_demo_catalogue`:**
+  - It loads the demo products, opening stock (recorded as "System") and suppliers. It creates no users, passwords, PINs or customers.
+  - It runs under production settings and refuses a store with any products, stock movements, suppliers, purchases or sales.
+  - It shares `apps/store/demo_catalogue.py` with `seed_demo`, which is unchanged in behaviour and still refuses production.
+- **`render.yaml`:** Starter web service (Docker, Singapore, 1 GB disk at `/var/data`, migrate as the pre-deploy command, manual deploys) and Basic-256mb Postgres 18 with no internet access. It validates against Render's published schema. The secret key is pasted (`sync: false`) because Render's generated values are 44 characters and production requires at least 50.
+- **CI (`.github/workflows/ci.yml`):**
+  - Backend tests on PostgreSQL 18, the migration check and the schema diff.
+  - Frontend typecheck, lint, tests and build.
+  - The image build, with checks that it holds no `.env`, database or dump, that the assets were collected, and that the start script refuses to run without the proxy setting.
+- **Docs:** a root `README.md`, and `docs/deployment.md` §2 (Docker) and §10 (Render configuration, steps, demo data and reviewer accounts, cost, backups).
+- **Docker isn't installed on the development machine,** so the image itself hasn't been built here. Each step was run outside Docker on a copy of exactly the files the build context includes:
+  - `npm ci` and the build on Node 22.19.
+  - The pinned install.
+  - `collectstatic` with the placeholder values and an unreachable database host.
+  - `start.sh` (paths pointed at the copy, bound to 127.0.0.1, `clearsessions` left out so `loomdesk_prod` was only read): it refused to start without the proxy setting, then passed `check --deploy` and served.
+  - Smoke checks: the session endpoint answers with a `Secure` CSRF cookie; SPA routes return 200 with `no-cache`; hashed assets are gzip-compressed and immutable; a missing asset gets 404; an unknown API path gets the error envelope; the CSP nonce matches the page; an anonymous inventory request gets 403.
+  - `load_demo_catalogue` refused `loomdesk_prod`, which has data.
+
 ---
 
 ## 10. Requirements traceability
