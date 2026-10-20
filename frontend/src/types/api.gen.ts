@@ -91,6 +91,39 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/set-password/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["auth_set_password_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/set-password/{uid}/{token}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Check a set-password link before showing the form. Throttled like sign-in. */
+        get: operations["auth_set_password_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/billing/approvers/": {
         parameters: {
             query?: never;
@@ -510,6 +543,108 @@ export interface paths {
         get: operations["sales_summary_retrieve"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staff/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Staff accounts. Adding one returns its first set-password link, once (decision D5). */
+        get: operations["staff_list"];
+        put?: never;
+        /** @description Staff accounts. Adding one returns its first set-password link, once (decision D5). */
+        post: operations["staff_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staff/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["staff_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["staff_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/staff/{id}/deactivate/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Deactivated staff can't sign in and their open sessions stop working; their history stays. */
+        post: operations["staff_deactivate_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staff/{id}/pin/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description The discount approval PIN, typed by the staff member themselves. Never returned. */
+        put: operations["staff_pin_update"];
+        post?: never;
+        /** @description The discount approval PIN, typed by the staff member themselves. Never returned. */
+        delete: operations["staff_pin_destroy"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staff/{id}/reactivate/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["staff_reactivate_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staff/{id}/setup-link/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description A new one-time set-password link, shown once; any earlier link stops working. */
+        post: operations["staff_setup_link_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -985,6 +1120,21 @@ export interface components {
             previous?: string | null;
             results: components["schemas"]["SellableProduct"][];
         };
+        PaginatedStaffList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["Staff"][];
+        };
         PaginatedSupplierListList: {
             /** @example 123 */
             count: number;
@@ -1033,6 +1183,12 @@ export interface components {
             status?: components["schemas"]["ActiveStatusEnum"];
             variants?: components["schemas"]["VariantWriteRequest"][];
         };
+        PatchedStaffUpdateRequest: {
+            /** Format: email */
+            email?: string;
+            full_name?: string;
+            role?: components["schemas"]["RoleEnum"];
+        };
         /** @description Contact and business details only. Balances change through purchases and payments, never here. */
         PatchedSupplierWriteRequest: {
             name?: string;
@@ -1072,6 +1228,9 @@ export interface components {
             can_access_admin: boolean;
             can_approve_discounts: boolean;
             can_view_costs: boolean;
+        };
+        PinRequest: {
+            pin: string;
         };
         PricedLine: {
             variant: number;
@@ -1561,6 +1720,58 @@ export interface components {
         Session: {
             user: components["schemas"]["Me"] | null;
         };
+        SetPasswordLink: {
+            full_name: string;
+            /** Format: email */
+            email: string;
+        };
+        SetPasswordRequest: {
+            uid: string;
+            token: string;
+            password: string;
+        };
+        /** @description Shown once: the server keeps no copy of the link. */
+        SetupLink: {
+            path: string;
+            /** Format: date-time */
+            expires_at: string;
+        };
+        /** @description A staff account as the admin sees it. Never includes the password, PIN or a link. */
+        Staff: {
+            readonly id: number;
+            /**
+             * Email address
+             * Format: email
+             */
+            readonly email: string;
+            readonly full_name: string;
+            readonly initials: string;
+            readonly role: components["schemas"]["RoleEnum"];
+            /**
+             * Active
+             * @description Designates whether this user should be treated as active. Unselect this instead of deleting accounts.
+             */
+            readonly is_active: boolean;
+            readonly has_pin: boolean;
+            /** @description False until the person uses their first set-password link. */
+            readonly password_set: boolean;
+            /** Format: date-time */
+            readonly setup_link_issued_at: string | null;
+            /** Format: date-time */
+            readonly last_login: string | null;
+            /** Format: date-time */
+            readonly date_joined: string;
+        };
+        StaffCreateRequest: {
+            /** Format: email */
+            email: string;
+            full_name: string;
+            role: components["schemas"]["RoleEnum"];
+        };
+        StaffCreated: {
+            staff: components["schemas"]["Staff"];
+            setup_link: components["schemas"]["SetupLink"];
+        };
         StatementEntry: {
             /** Format: date */
             date: string;
@@ -1903,6 +2114,52 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Session"];
+                };
+            };
+        };
+    };
+    auth_set_password_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetPasswordRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["SetPasswordRequest"];
+                "multipart/form-data": components["schemas"]["SetPasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    auth_set_password_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetPasswordLink"];
                 };
             };
         };
@@ -2706,6 +2963,227 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SalesSummary"];
+                };
+            };
+        };
+    };
+    staff_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description Name or email (or part of it) */
+                q?: string;
+                /**
+                 * @description * `admin` - Admin
+                 *     * `senior_cashier` - Senior cashier
+                 *     * `cashier` - Cashier
+                 */
+                role?: "admin" | "cashier" | "senior_cashier";
+                /**
+                 * @description * `active` - Active
+                 *     * `inactive` - Deactivated
+                 *     * `pending` - Password not set yet
+                 */
+                status?: "active" | "inactive" | "pending";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedStaffList"];
+                };
+            };
+        };
+    };
+    staff_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["StaffCreateRequest"];
+                "multipart/form-data": components["schemas"]["StaffCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffCreated"];
+                };
+            };
+        };
+    };
+    staff_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Staff"];
+                };
+            };
+        };
+    };
+    staff_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedStaffUpdateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedStaffUpdateRequest"];
+                "multipart/form-data": components["schemas"]["PatchedStaffUpdateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Staff"];
+                };
+            };
+        };
+    };
+    staff_deactivate_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Staff"];
+                };
+            };
+        };
+    };
+    staff_pin_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PinRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PinRequest"];
+                "multipart/form-data": components["schemas"]["PinRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Staff"];
+                };
+            };
+        };
+    };
+    staff_pin_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    staff_reactivate_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Staff"];
+                };
+            };
+        };
+    };
+    staff_setup_link_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetupLink"];
                 };
             };
         };

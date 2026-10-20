@@ -41,6 +41,9 @@ class User(AbstractUser):
     # Hashed 4–6 digit PIN a Senior cashier/Admin enters at the till to approve a
     # discount above the cashier limit. Never returned by the API.
     approval_pin_hash = models.CharField(max_length=128, blank=True)
+    # When the newest set-password link was issued. It's part of the link's token, so issuing another
+    # link or using this one (which clears it) makes every earlier link stop working.
+    setup_link_issued_at = models.DateTimeField(null=True, blank=True)
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = ["full_name"]

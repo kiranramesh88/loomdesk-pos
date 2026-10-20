@@ -92,3 +92,12 @@ export const ROLE_LABELS: Record<Role, string> = {
 }
 
 export const ALL_ROLES: readonly Role[] = ['admin', 'senior_cashier', 'cashier']
+
+export type StaffMember = Schemas['Staff']
+export type StaffPage = Schemas['PaginatedStaffList']
+export type StaffCreate = Schemas['StaffCreateRequest']
+export type StaffUpdate = Schemas['PatchedStaffUpdateRequest']
+export type StaffCreated = Schemas['StaffCreated']
+export type SetupLink = Schemas['SetupLink']
+export type SetPasswordLink = Schemas['SetPasswordLink']
+export type SetPasswordRequest = Schemas['SetPasswordRequest']

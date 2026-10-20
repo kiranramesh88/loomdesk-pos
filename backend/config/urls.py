@@ -18,6 +18,7 @@ api_v1 = [
     path("billing/", include(billing_urlpatterns)),
     path("sales/", include(sales_urlpatterns)),
     path("returns/", include("apps.returns.urls")),
+    path("staff/", include("apps.accounts.staff_urls")),
     path("schema/", SpectacularAPIView.as_view(), name="api-schema"),
     # The split view serves its start-up script as a file, so the CSP needs no inline scripts.
     path(

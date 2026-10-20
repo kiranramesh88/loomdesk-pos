@@ -464,6 +464,15 @@ def test_audit_entries_are_append_only(shirt, admin):
     assert AuditEntry.objects.get().summary.startswith("Voided")
 
 
+def test_return_audit_summary_reads_plainly(shirt, admin):
+    sale = _sell(admin, [(shirt, 2)])
+    response = _return(admin, sale, [(_line(sale, shirt), 1, "sellable")])
+    entry = AuditEntry.objects.get(action="return.create")
+    total = response.json()["total_paise"]
+    assert entry.summary == f"{response.json()['number']} for {sale.invoice_no}: 1 unit, refund ₹{total / 100:,.2f} by Cash"
+    assert entry.details["invoice_no"] == sale.invoice_no and entry.details["refund_paise"] == total
+
+
 def test_audit_refuses_credentials(admin):
     from apps.audit import services as audit
 

@@ -76,6 +76,10 @@ def refund_for(line: SaleLine, already_returned: int, quantity: int, prices_incl
     return RefundFigures(subtotal, subtotal - after_discount, taxable, tax, total)
 
 
+def _units(count: int) -> str:
+    return f"{count} unit" if count == 1 else f"{count} units"
+
+
 def returned_by_line(sale: Sale) -> dict[int, int]:
     rows = ReturnLine.objects.filter(sale_line__sale=sale).values("sale_line").annotate(units=Sum("quantity"))
     return {row["sale_line"]: row["units"] for row in rows}
@@ -252,8 +256,8 @@ def _write_return(user: User, data: dict, key, fingerprint: str) -> Return:
         user,
         AuditEntry.Action.RETURN_CREATE,
         ret.number,
-        f"{ret.number} for {sale.invoice_no}: {sum(p.quantity for p in planned)} unit(s), "
-        f"refund ₹{total.total_paise / 100:,.2f} by {refund['method']}",
+        f"{ret.number} for {sale.invoice_no}: {_units(sum(p.quantity for p in planned))}, "
+        f"refund ₹{total.total_paise / 100:,.2f} by {Payment.Method(refund['method']).label}",
         invoice_no=sale.invoice_no,
         refund_paise=total.total_paise,
         method=refund["method"],

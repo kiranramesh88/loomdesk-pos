@@ -5,6 +5,7 @@
 export const queryKeys = {
   auth: {
     me: ['auth', 'me'] as const,
+    setPasswordLink: (uid: string, token: string) => ['auth', 'set-password', uid, token] as const,
   },
   store: {
     detail: ['store'] as const,
@@ -67,5 +68,11 @@ export const queryKeys = {
     list: (params: Record<string, string>) => ['returns', 'list', params] as const,
     detail: (number: string) => ['returns', 'detail', number] as const,
     returnable: (invoiceNo: string) => ['returns', 'returnable', invoiceNo] as const,
+  },
+  staff: {
+    /** Staff lists and accounts: every staff change invalidates this prefix. */
+    all: ['staff'] as const,
+    list: (params: Record<string, string>) => ['staff', 'list', params] as const,
+    detail: (id: number) => ['staff', 'detail', id] as const,
   },
 } as const

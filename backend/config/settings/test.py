@@ -13,4 +13,4 @@ if os.environ.get("DB_ENGINE") == "sqlite":
     DATABASES = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:", "ATOMIC_REQUESTS": True}}
 
 # Throttling is exercised explicitly in the tests that need it.
-REST_FRAMEWORK = {**REST_FRAMEWORK, "DEFAULT_THROTTLE_RATES": {"login": "1000/min"}}  # noqa: F405
+REST_FRAMEWORK = {**REST_FRAMEWORK, "DEFAULT_THROTTLE_RATES": {"login": "1000/min", "set_password": "1000/min"}}  # noqa: F405

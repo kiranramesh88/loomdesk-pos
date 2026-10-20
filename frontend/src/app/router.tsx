@@ -13,6 +13,7 @@ import { transactionRoutes } from '@/features/transactions/routes'
 import { inventoryRoutes } from '@/features/inventory/routes'
 import { supplierRoutes } from '@/features/suppliers/routes'
 import { returnRoutes } from '@/features/returns/routes'
+import { staffRoutes } from '@/features/staff/routes'
 import { mobileRoutes } from '@/layouts/mobile/mobileRoutes'
 import { ALL_ROLES } from '@/types/domain'
 
@@ -42,6 +43,7 @@ const MODULE_ROUTES: Partial<Record<string, RouteObject[]>> = {
   inventory: inventoryRoutes,
   suppliers: supplierRoutes,
   returns: returnRoutes,
+  staff: staffRoutes,
 }
 
 // One route per nav item, so titles, active links and nested paths come from the same config.
@@ -65,6 +67,12 @@ export const routes: RouteObject[] = [
   {
     path: '/login',
     lazy: async () => ({ Component: (await import('@/features/auth/pages/LoginPage')).LoginPage }),
+    hydrateFallbackElement: <PageLoader />,
+  },
+  // Public like sign-in: the one-time link from an admin is the credential (decision D5).
+  {
+    path: '/set-password/:uid/:token',
+    lazy: async () => ({ Component: (await import('@/features/staff/pages/SetPasswordPage')).SetPasswordPage }),
     hydrateFallbackElement: <PageLoader />,
   },
   {

@@ -115,6 +115,9 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
+# How long a staff set-password link works (decision D5): three days, then the admin issues another.
+PASSWORD_RESET_TIMEOUT = 3 * 24 * 60 * 60
+
 LANGUAGE_CODE = "en-in"
 TIME_ZONE = "Asia/Kolkata"
 USE_I18N = True
@@ -162,7 +165,7 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "config.pagination.StandardPagination",
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "EXCEPTION_HANDLER": "config.exceptions.api_exception_handler",
-    "DEFAULT_THROTTLE_RATES": {"login": "10/min"},
+    "DEFAULT_THROTTLE_RATES": {"login": "10/min", "set_password": "10/min"},
 }
 
 SPECTACULAR_SETTINGS = {
