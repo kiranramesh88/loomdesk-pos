@@ -547,6 +547,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/suppliers/purchases/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Every supplier's purchases, newest first, e.g. all purchases awaiting goods (`?status=ordered`). */
+        get: operations["purchases_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/suppliers/purchases/{number}/": {
         parameters: {
             query?: never;
@@ -1062,6 +1079,8 @@ export interface components {
             readonly subtotal_paise: number;
             readonly tax_paise: number;
             readonly total_paise: number;
+            /** @description The variant's stock now, not when the purchase was recorded. Receiving adds `quantity` to it. */
+            readonly current_on_hand: number;
         };
         PurchaseLineInputRequest: {
             variant: number;
@@ -1337,6 +1356,8 @@ export interface components {
             readonly name: string;
             readonly code: string;
             readonly state: string;
+            /** @description The store's current date. Date filters (e.g. today's sales) use store dates, not the device's. */
+            readonly today: string;
         };
         SupplierDetail: {
             readonly id: number;
@@ -2426,6 +2447,8 @@ export interface operations {
                 page?: number;
                 /** @description Number of results to return per page. */
                 page_size?: number;
+                /** @description Purchase number, supplier invoice number or supplier name */
+                q?: string;
                 /**
                  * @description * `ordered` - Awaiting goods
                  *     * `received` - Received
@@ -2525,6 +2548,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": string[];
+                };
+            };
+        };
+    };
+    purchases_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description Purchase number, supplier invoice number or supplier name */
+                q?: string;
+                /**
+                 * @description * `ordered` - Awaiting goods
+                 *     * `received` - Received
+                 *     * `cancelled` - Cancelled
+                 */
+                status?: "cancelled" | "ordered" | "received";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedPurchaseListItemList"];
                 };
             };
         };

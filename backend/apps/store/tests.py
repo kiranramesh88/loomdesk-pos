@@ -1,6 +1,7 @@
 import pytest
 from django.core.management import call_command
 from django.db.models import Sum
+from django.utils import timezone
 
 from rest_framework.test import APIClient
 
@@ -52,7 +53,9 @@ def test_store_returns_identity_only_to_admins(store):
     response = _client_as(Role.ADMIN).get("/api/v1/store/")
     assert response.status_code == 200
     # Only identity; tax and discount settings stay out of this endpoint.
-    assert response.json() == {"name": "Loom & Linen", "code": "LL-KKD-01", "state": "Kerala"}
+    assert response.json() == {
+        "name": "Loom & Linen", "code": "LL-KKD-01", "state": "Kerala", "today": timezone.localdate().isoformat(),
+    }
 
 
 def test_store_requires_authentication(store):

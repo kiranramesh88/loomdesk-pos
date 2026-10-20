@@ -4,7 +4,7 @@ import django_filters
 from django.db.models import F, IntegerField, OuterRef, Q, Subquery, Sum, Value
 from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
-from drf_spectacular.utils import OpenApiParameter, extend_schema
+from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 from rest_framework import generics, status
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
@@ -140,10 +140,35 @@ def purchase_queryset():
 
 class PurchaseFilter(django_filters.FilterSet):
     status = django_filters.ChoiceFilter(choices=Purchase.Status.choices)
+    q = django_filters.CharFilter(method="search", label="Purchase number, supplier invoice number or supplier name")
 
     class Meta:
         model = Purchase
         fields = ["status"]
+
+    def search(self, queryset, name, value):
+        value = value.strip()
+        if not value:
+            return queryset
+        return queryset.filter(
+            Q(number__icontains=value) | Q(supplier_invoice_no__icontains=value) | Q(supplier__name__icontains=value)
+        )
+
+
+def purchase_list_queryset():
+    return Purchase.objects.select_related("supplier").annotate(item_count=Coalesce(Sum("lines__quantity"), 0))
+
+
+@extend_schema_view(get=extend_schema(operation_id="purchases_list"))
+class PurchaseListView(generics.ListAPIView):
+    """Every supplier's purchases, newest first, e.g. all purchases awaiting goods (`?status=ordered`)."""
+
+    permission_classes = [IsAdmin]
+    serializer_class = PurchaseListItemSerializer
+    filterset_class = PurchaseFilter
+
+    def get_queryset(self):
+        return purchase_list_queryset().order_by("-purchase_date", "-id")
 
 
 class SupplierPurchaseListView(generics.ListAPIView):
@@ -155,10 +180,7 @@ class SupplierPurchaseListView(generics.ListAPIView):
 
     def get_queryset(self):
         return (
-            Purchase.objects.filter(supplier_id=self.kwargs.get("pk"))
-            .select_related("supplier")
-            .annotate(item_count=Coalesce(Sum("lines__quantity"), 0))
-            .order_by("-purchase_date", "-id")
+            purchase_list_queryset().filter(supplier_id=self.kwargs.get("pk")).order_by("-purchase_date", "-id")
         )
 
     def list(self, request, *args, **kwargs):

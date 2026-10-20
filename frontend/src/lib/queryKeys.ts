@@ -35,6 +35,9 @@ export const queryKeys = {
     categories: ['suppliers', 'categories'] as const,
     detail: (id: number) => ['suppliers', 'detail', id] as const,
     purchases: (id: number, params: Record<string, string>) => ['suppliers', 'purchases', id, params] as const,
+    /** Every supplier's purchases (mobile admin's receiving list). */
+    allPurchases: (params: Record<string, string>) => ['suppliers', 'all-purchases', params] as const,
+    payments: (id: number, params: Record<string, string>) => ['suppliers', 'payments', id, params] as const,
     statement: (id: number) => ['suppliers', 'statement', id] as const,
     purchase: (number: string) => ['suppliers', 'purchase', number] as const,
     quote: (lines: unknown) => ['suppliers', 'quote', lines] as const,

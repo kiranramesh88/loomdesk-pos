@@ -153,12 +153,17 @@ class PurchaseQuoteSerializer(serializers.Serializer):
 
 class PurchaseLineSerializer(serializers.ModelSerializer):
     product_id = serializers.IntegerField(source="variant.product_id", read_only=True)
+    current_on_hand = serializers.IntegerField(
+        source="variant.on_hand",
+        read_only=True,
+        help_text="The variant's stock now, not when the purchase was recorded. Receiving adds `quantity` to it.",
+    )
 
     class Meta:
         model = PurchaseLine
         fields = [
             "id", "variant", "product_id", "product_name", "variant_sku", "size", "colour", "quantity", "unit_cost_paise",
-            "tax_rate_bp", "subtotal_paise", "tax_paise", "total_paise",
+            "tax_rate_bp", "subtotal_paise", "tax_paise", "total_paise", "current_on_hand",
         ]
         read_only_fields = fields
 

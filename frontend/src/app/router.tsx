@@ -6,16 +6,17 @@ import { PageLoader } from '@/components/feedback/PageLoader'
 import { StatusScreen } from '@/components/feedback/StatusScreen'
 import { ADMIN_NAV, type AdminRouteHandle } from '@/layouts/admin/adminNav'
 import { AdminNotFound, AdminRouteError, AdminShellError } from '@/layouts/admin/AdminPageStates'
+import { MobileRouteError } from '@/layouts/mobile/MobilePageStates'
 import { billingRoutes } from '@/features/billing/routes'
 import { productRoutes } from '@/features/products/routes'
 import { transactionRoutes } from '@/features/transactions/routes'
 import { inventoryRoutes } from '@/features/inventory/routes'
 import { supplierRoutes } from '@/features/suppliers/routes'
+import { mobileRoutes } from '@/layouts/mobile/mobileRoutes'
 import { ALL_ROLES } from '@/types/domain'
 
 import { HomeRedirect, RequireRole } from './guards'
-import { AdminLayout, AdminPlaceholderPage, BillingLayout } from './lazyPages'
-import { ScaffoldPage } from './ScaffoldPage'
+import { AdminLayout, AdminPlaceholderPage, BillingLayout, MobileAdminLayout } from './lazyPages'
 
 const homeLink = (
   <Link to="/" className="type-body font-semibold text-primary hover:underline">
@@ -54,7 +55,7 @@ const adminRoutes: RouteObject[] = [
   { path: '*', element: <AdminNotFound />, handle: { title: 'Page not found' } satisfies AdminRouteHandle },
 ]
 
-// Route map: docs/frontend_implementation_plan.md §2. Scaffold pages are replaced phase by phase.
+// Route map: docs/frontend_implementation_plan.md §2.
 export const routes: RouteObject[] = [
   ...devRoutes,
   { path: '/', element: <HomeRedirect /> },
@@ -83,8 +84,17 @@ export const routes: RouteObject[] = [
   {
     element: <RequireRole roles={['admin']} />,
     children: [
-      // Listed before /admin/* so the mandatory mobile route always resolves to the mobile shell.
-      { path: '/admin/mobile/*', element: <ScaffoldPage area="Mobile admin" phase={8} /> },
+      // Listed before /admin so the mandatory mobile route always resolves to the mobile shell.
+      {
+        path: '/admin/mobile',
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <MobileAdminLayout />
+          </Suspense>
+        ),
+        errorElement: <AdminShellError />,
+        children: [{ errorElement: <MobileRouteError />, children: mobileRoutes }],
+      },
       {
         path: '/admin',
         element: (

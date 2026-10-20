@@ -13,6 +13,7 @@ import type {
   SupplierDetail,
   SupplierPage,
   SupplierPayment,
+  SupplierPaymentPage,
   SupplierPaymentWrite,
   SupplierStatement,
   SupplierWrite,
@@ -59,6 +60,30 @@ export function useSupplierPurchases(id: number, page: number, status: PurchaseS
   return useQuery({
     queryKey: queryKeys.suppliers.purchases(id, query),
     queryFn: ({ signal }) => apiFetch<PurchaseListPage>(`/suppliers/${id}/purchases/?${toSearch(query)}`, { signal }),
+    placeholderData: keepPreviousData,
+    retry: retryTransient,
+  })
+}
+
+/** Purchases from every supplier, newest first; filter by status and search number, invoice or supplier. */
+export function useAllPurchases(params: { q: string; status: PurchaseStatus | ''; page: number }) {
+  const query: Record<string, string> = { page: String(params.page), page_size: String(PURCHASE_PAGE_SIZE) }
+  if (params.q) query.q = params.q
+  if (params.status) query.status = params.status
+  return useQuery({
+    queryKey: queryKeys.suppliers.allPurchases(query),
+    queryFn: ({ signal }) => apiFetch<PurchaseListPage>(`/suppliers/purchases/?${toSearch(query)}`, { signal }),
+    placeholderData: keepPreviousData,
+    retry: retryTransient,
+  })
+}
+
+/** Payments recorded by staff for one supplier, newest first. None is gateway- or bank-verified. */
+export function useSupplierPayments(id: number, page: number) {
+  const query = { page: String(page), page_size: String(PURCHASE_PAGE_SIZE) }
+  return useQuery({
+    queryKey: queryKeys.suppliers.payments(id, query),
+    queryFn: ({ signal }) => apiFetch<SupplierPaymentPage>(`/suppliers/${id}/payments/?${toSearch(query)}`, { signal }),
     placeholderData: keepPreviousData,
     retry: retryTransient,
   })

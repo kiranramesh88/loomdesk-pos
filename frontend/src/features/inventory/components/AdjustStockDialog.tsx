@@ -13,7 +13,16 @@ import { ApiError } from '@/lib/http'
 import type { AdjustmentKind, InventoryVariant } from '@/types/domain'
 
 import { useAdjustStock, useInventoryVariant } from '../api'
-import { ADJUSTMENT_KINDS, formatDelta, parseQuantity, resultingQuantity, STOCK_LABELS, variantName } from '../labels'
+import {
+  ADJUSTMENT_KINDS,
+  formatDelta,
+  parseQuantity,
+  resultingQuantity,
+  STOCK_LABELS,
+  validateAdjustment,
+  variantName,
+  type AdjustmentErrors,
+} from '../labels'
 
 interface AdjustStockDialogProps {
   /** The row the adjustment was opened from; null when closed. */
@@ -38,12 +47,6 @@ export function AdjustStockDialog({ variant, onClose }: AdjustStockDialogProps) 
   )
 }
 
-interface Errors {
-  kind?: string
-  quantity?: string
-  reason?: string
-}
-
 function AdjustForm({ row, onClose }: { row: InventoryVariant; onClose: () => void }) {
   // The live figure: after a 409 the inventory queries refetch and the preview follows.
   const live = useInventoryVariant(String(row.id))
@@ -53,7 +56,7 @@ function AdjustForm({ row, onClose }: { row: InventoryVariant; onClose: () => vo
   const [kind, setKind] = useState<AdjustmentKind | null>(null)
   const [quantity, setQuantity] = useState('')
   const [reason, setReason] = useState('')
-  const [errors, setErrors] = useState<Errors>({})
+  const [errors, setErrors] = useState<AdjustmentErrors>({})
   const [serverError, setServerError] = useState<string>()
   const kindLabel = useId()
 
@@ -61,19 +64,8 @@ function AdjustForm({ row, onClose }: { row: InventoryVariant; onClose: () => vo
   const after = kind ? resultingQuantity(kind, variant.on_hand, parsed) : null
   const option = ADJUSTMENT_KINDS.find((k) => k.value === kind)
 
-  const validate = (): Errors => {
-    const next: Errors = {}
-    if (!kind) next.kind = 'Choose add, remove or a counted quantity.'
-    if (parsed === null) next.quantity = 'Enter a whole number of units.'
-    else if (kind !== 'count' && parsed < 1) next.quantity = 'Enter at least 1 unit.'
-    else if (parsed > 10_000) next.quantity = 'Enter 10,000 units or fewer.'
-    else if (after !== null && after < 0) next.quantity = `Only ${variant.on_hand} in stock; stock can’t go negative.`
-    if (reason.trim().length < 3) next.reason = 'Say why stock is changing, such as “Damaged in storage”.'
-    return next
-  }
-
   const submit = () => {
-    const found = validate()
+    const found = validateAdjustment(kind, quantity, reason, variant.on_hand)
     setErrors(found)
     setServerError(undefined)
     if (Object.keys(found).length || !kind || parsed === null) return

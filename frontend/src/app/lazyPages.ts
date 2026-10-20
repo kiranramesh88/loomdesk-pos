@@ -5,4 +5,7 @@ export const AdminLayout = lazy(() => import('@/layouts/admin/AdminLayout').then
 export const AdminPlaceholderPage = lazy(() =>
   import('@/features/admin/AdminPlaceholderPage').then((m) => ({ default: m.AdminPlaceholderPage })),
 )
+export const MobileAdminLayout = lazy(() =>
+  import('@/layouts/mobile/MobileAdminLayout').then((m) => ({ default: m.MobileAdminLayout })),
+)
 export const BillingLayout = lazy(() => import('@/layouts/billing/BillingLayout').then((m) => ({ default: m.BillingLayout })))

@@ -11,6 +11,9 @@ const readPage = (search: URLSearchParams) => {
 }
 const digits = (value: string | null) => (value && /^\d+$/.test(value) ? value : '')
 
+/** Variant ids in a URL are digits; anything else is shown as not found without a request. */
+export const parseVariantId = (raw: string | undefined) => (raw && /^\d{1,9}$/.test(raw) ? raw : '')
+
 // --- Stock list: /admin/inventory?q=&category=&state=&status=&sort=&page= (plan §2) ---
 
 export const PAGE_SIZE = 25

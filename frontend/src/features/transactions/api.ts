@@ -28,13 +28,23 @@ export function useTransactions(params: TransactionParams) {
   })
 }
 
-/** Completed sales matching the same filters as the list (admin only). */
-export function useSalesSummary(params: TransactionParams) {
+/** The latest bills, newest first (mobile overview). */
+export function useRecentSales(count: number) {
+  const query = { page: '1', page_size: String(count) }
+  return useQuery({
+    queryKey: queryKeys.sales.list(query),
+    queryFn: ({ signal }) => apiFetch<SalePage>(`/sales/?${toSearch(query)}`, { signal }),
+    retry: retryTransient,
+  })
+}
+
+/** Completed sales matching the same filters as the list (admin only). `enabled: false` waits, e.g. for the store's date. */
+export function useSalesSummary(params: TransactionParams, { enabled = true }: { enabled?: boolean } = {}) {
   const query = filterQuery(params)
   return useQuery({
     queryKey: queryKeys.sales.summary(query),
     queryFn: ({ signal }) => apiFetch<SalesSummary>(`/sales/summary/?${toSearch(query)}`, { signal }),
-    enabled: !rangeIsBackwards(params),
+    enabled: enabled && !rangeIsBackwards(params),
     placeholderData: keepPreviousData,
     retry: retryTransient,
   })

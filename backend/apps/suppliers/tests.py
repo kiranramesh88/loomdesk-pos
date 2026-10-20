@@ -100,7 +100,7 @@ def _all_endpoints(supplier_id=1, number="PUR-000001"):
         ("get", API), ("post", API), ("get", API + "categories/"), ("get", f"{API}{supplier_id}/"),
         ("patch", f"{API}{supplier_id}/"), ("get", f"{API}{supplier_id}/purchases/"), ("post", f"{API}{supplier_id}/purchases/"),
         ("get", f"{API}{supplier_id}/payments/"), ("post", f"{API}{supplier_id}/payments/"),
-        ("get", f"{API}{supplier_id}/statement/"), ("post", QUOTE), ("get", purchase_url(number)),
+        ("get", f"{API}{supplier_id}/statement/"), ("post", QUOTE), ("get", API + "purchases/"), ("get", purchase_url(number)),
         ("put", purchase_url(number)), ("post", purchase_url(number, "receive")), ("post", purchase_url(number, "cancel")),
     ]
 
@@ -517,3 +517,39 @@ def test_supplier_purchase_list(api, supplier, stock):
     assert rows[1]["item_count"] == 18 and rows[1]["supplier_name"] == "Malabar Textile House"
     assert [r["number"] for r in api.get(f"{API}{supplier.pk}/purchases/", {"status": "received"}).json()["results"]] == [first]
     assert api.get(f"{API}99999/purchases/").status_code == 404
+
+
+def test_purchases_across_suppliers(api, supplier, stock):
+    other = Supplier.objects.create(name="Cotton Collective", category="Cotton basics")
+    received = _record(api, supplier, _body(stock)).json()["number"]
+    api.post(purchase_url(received, "receive"))
+    awaiting = _record(api, other, _body(stock, supplier_invoice_no="CC/77")).json()["number"]
+    cancelled = _record(api, supplier, _body(stock, supplier_invoice_no="X-1")).json()["number"]
+    api.post(purchase_url(cancelled, "cancel"), {"reason": "Entered twice"}, format="json")
+
+    def numbers(**params):
+        response = api.get(API + "purchases/", params)
+        assert response.status_code == 200, response.json()
+        return [r["number"] for r in response.json()["results"]]
+
+    assert numbers() == [cancelled, awaiting, received]
+    assert numbers(status="ordered") == [awaiting]
+    # Search: purchase number, supplier invoice number or supplier name, case-insensitive.
+    assert numbers(q="cc/77") == [awaiting]
+    assert numbers(q="cotton coll") == [awaiting]
+    assert numbers(q=received) == [received]
+    assert numbers(q="nothing like this") == []
+    assert api.get(API + "purchases/", {"status": "lost"}).status_code == 400
+    row = api.get(API + "purchases/", {"status": "ordered"}).json()["results"][0]
+    assert row["supplier_name"] == "Cotton Collective" and row["item_count"] == 18 and row["total_paise"] > 0
+
+
+def test_purchase_lines_show_current_stock_for_the_receive_preview(api, supplier, stock):
+    number = _record(api, supplier, _body(stock)).json()["number"]
+    lines = {line["variant_sku"]: line for line in api.get(purchase_url(number)).json()["lines"]}
+    assert (lines["SH-CT-001-M"]["current_on_hand"], lines["SH-CT-001-M"]["quantity"]) == (4, 10)
+    assert lines["AC-TT-001-ONE"]["current_on_hand"] == 0
+    api.post(purchase_url(number, "receive"))
+    lines = {line["variant_sku"]: line for line in api.get(purchase_url(number)).json()["lines"]}
+    # Live, not a snapshot: after receiving it includes the received units.
+    assert lines["SH-CT-001-M"]["current_on_hand"] == 14 and lines["AC-TT-001-ONE"]["current_on_hand"] == 5

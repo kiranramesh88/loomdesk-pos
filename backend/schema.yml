@@ -1146,6 +1146,11 @@ paths:
         schema:
           type: integer
       - in: query
+        name: q
+        schema:
+          type: string
+        description: Purchase number, supplier invoice number or supplier name
+      - in: query
         name: status
         schema:
           type: string
@@ -1249,6 +1254,52 @@ paths:
                 type: array
                 items:
                   type: string
+          description: ''
+  /api/v1/suppliers/purchases/:
+    get:
+      operationId: purchases_list
+      description: Every supplier's purchases, newest first, e.g. all purchases awaiting
+        goods (`?status=ordered`).
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: q
+        schema:
+          type: string
+        description: Purchase number, supplier invoice number or supplier name
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - cancelled
+          - ordered
+          - received
+        description: |-
+          * `ordered` - Awaiting goods
+          * `received` - Received
+          * `cancelled` - Cancelled
+      tags:
+      - suppliers
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPurchaseListItemList'
           description: ''
   /api/v1/suppliers/purchases/{number}/:
     get:
@@ -2537,8 +2588,14 @@ components:
         total_paise:
           type: integer
           readOnly: true
+        current_on_hand:
+          type: integer
+          readOnly: true
+          description: The variant's stock now, not when the purchase was recorded.
+            Receiving adds `quantity` to it.
       required:
       - colour
+      - current_on_hand
       - id
       - product_id
       - product_name
@@ -3312,10 +3369,16 @@ components:
         state:
           type: string
           readOnly: true
+        today:
+          type: string
+          readOnly: true
+          description: The store's current date. Date filters (e.g. today's sales)
+            use store dates, not the device's.
       required:
       - code
       - name
       - state
+      - today
     SupplierDetail:
       type: object
       properties:

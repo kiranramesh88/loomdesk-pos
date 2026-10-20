@@ -123,10 +123,12 @@ Every route is a client route under one SPA. Django serves `index.html` for any 
 | Path | Page | Bottom tab |
 |---|---|---|
 | `/admin/mobile/` | `MobileOverviewPage` | Overview |
-| `/admin/mobile/products` · `/products/:id` · `/products/new` · `/products/:id/edit` | list, detail, form | Products |
-| `/admin/mobile/bills` · `/bills/:invoiceNo` | transaction list and detail | Bills |
-| `/admin/mobile/more` | `MobileMoreMenu` | More |
-| `/admin/mobile/inventory` · `/returns` · `/returns/new` · `/returns/:returnNo` · `/suppliers` · `/suppliers/:id` · `/staff` · `/reports` · `/reports/:reportKey` · `/settings` | mobile versions of each module | More (highlighted) |
+| `/admin/mobile/inventory` · `/inventory/:variantId` · `/inventory/:variantId/adjust` · `/inventory/movements` | stock list, variant, two-step adjustment, ledger | Inventory |
+| `/admin/mobile/bills` · `/bills/:invoiceNo` · `/bills/:invoiceNo/receipt` | bill list, detail and receipt reprint | Bills |
+| `/admin/mobile/more` | `MobileMorePage` | More |
+| `/admin/mobile/suppliers` · `/suppliers/:id` · `/purchases` · `/purchases/:number` | supplier list and profile; purchases and receiving | More (highlighted) |
+
+Phase 8 changed this table: Inventory takes the Products tab (catalogue editing stays in the full admin, linked from More), and Returns, Staff, Reports and Settings get mobile routes when their modules are built.
 
 ### System
 `/403` and `*` (404). There's also `/dev/ui`, which exists only in dev builds.
@@ -487,13 +489,13 @@ Every checklist assumes the cross-cutting checks pass:
 - [ ] Store name, code and address (printed on receipts), plus register and tax defaults. Changing them doesn't affect past invoices.
 
 ### Mobile admin
-- [ ] `/admin/mobile/` and every sub-route work on a direct load, on refresh and with browser back.
-- [ ] The bottom nav (Overview, Products, Bills, More) shows the active state, and More is highlighted on its child pages.
-- [ ] Every admin section is reachable from More. There are no placeholders.
-- [ ] Tables become card rows (primary label, metadata, and amount, status or action on the right).
-- [ ] Forms open as full-screen pages or bottom sheets with a reachable Close or Back.
-- [ ] Frequent actions are ≥44 px. Nothing overflows horizontally at 360×800 and 390×844 (Playwright).
-- [ ] A slow or failing request shows a retry state, never a blank screen.
+- [x] `/admin/mobile/` and every sub-route work on a direct load, on refresh and with browser back.
+- [x] The bottom nav (Overview, Inventory, Bills, More) shows the active state, and More is highlighted on its child pages. Inventory replaces Products (Phase 8).
+- [ ] Every admin section is reachable from More. There are no placeholders. *Every built section is (Suppliers, Purchases, Stock movements, plus links to Products and the full admin); Returns, Staff, Reports and Settings aren't built, and More says so in text rather than showing dead links.*
+- [x] Tables become card rows (primary label, metadata, and amount, status or action on the right).
+- [x] Forms open as full-screen pages or bottom sheets with a reachable Close or Back.
+- [x] Frequent actions are ≥44 px. Nothing overflows horizontally at 360×800 and 390×844 (Playwright).
+- [x] A slow or failing request shows a retry state, never a blank screen.
 
 ### Final visual pass
 - [ ] Radii, shadows and spacing match the §4 tokens on every page.
@@ -1016,3 +1018,80 @@ Scope set by the user: supplier management, purchase recording, stock receiving 
 - There's no store-wide purchases list; purchases are listed per supplier.
 - There are no returns to suppliers and no debit notes. Payments can't be edited, voided or allocated to particular purchases.
 - This is an operational record, not accounting. Supplier balances aren't reconciled with a bank.
+
+### Phase 8: Mobile admin (done, 20 Oct 2026)
+
+Scope set by the user: a phone-first admin at `/admin/mobile/*` for the overview, inventory (with adjustments), bills and receipt reprints, suppliers, and purchases with receiving. It reuses the existing APIs and business rules. No new accounting, purchase orders, partial receipts or supplier returns.
+
+**Backend (small, additive, admin-only like the rest of `apps/suppliers`):**
+- `GET /suppliers/purchases/` (operation `purchases_list`): purchases from every supplier, newest first, with the `status` filter and `q` over the purchase number, supplier invoice number and supplier name. It lets a phone find a delivery without knowing the supplier. Phase 7's "no store-wide purchases list" limit no longer applies.
+- Purchase lines gain read-only `current_on_hand` (the variant's stock now), so the receive confirmation can show "now → after" per line. The server still adds exactly `quantity` when receiving.
+- `GET /store/` gains `today`, the store's local date, so "today" figures don't depend on the phone's clock or time zone.
+- Tests: the store-wide list (ordering, status filter, search, a bad status, row fields, and access for every role), `current_on_hand`, and the store's `today`.
+
+**Frontend:**
+- **Shell (`layouts/mobile/`):**
+  - `MobileAdminLayout`: a sticky header (brand, store, account menu), a single 640px-max column, and a fixed bottom nav with safe-area padding, hidden in print.
+  - `mobileNav.ts` holds the tabs, the More items and each route's `{title, tab}` handle; `mobileRoutes.tsx` lazy-loads every page.
+  - Page errors and unknown paths stay inside the shell. `RequireRole(['admin'])` guards it, so the server's role checks are unchanged.
+  - `ScaffoldPage` is removed.
+- **Overview:**
+  - Today's sales and bills come from `/sales/summary/` for the store's date; low and out-of-stock counts come from `/inventory/summary/`.
+  - It also shows quick actions, purchases awaiting goods, the lowest-stock variants and the latest bills.
+  - A failed figure shows "—" with a retry; the other panels are unaffected.
+- **Inventory:**
+  - **List:** search, a stock-level chip filter and sort, all in the URL.
+  - **Variant page:** on hand, reorder level, product total, facts and the last five movements.
+  - **Ledger:** type filter and per-variant view. `LD-` and `PUR-` references open the mobile pages.
+  - **Adjustment:** a two-step page. The edit step shows the live result; the review step shows the current and resulting quantity, the reason, and that movements can't be edited.
+  - Confirming sends the reviewed `expected_on_hand`. On 409 `stock_changed`, the page returns to the edit step with the new figure and records nothing.
+  - Validation is shared with the desktop dialog (`validateAdjustment`).
+- **Bills:**
+  - **List:** invoice search, a date range (with a "today" shortcut from the store date), method chips, and the matching count and total.
+  - **Detail:** reuses the desktop sections (`SaleSections.tsx`), including the manual-payment warning.
+  - **Receipt:** reprint renders the till's `Receipt` from the saved sale and calls `window.print()`; nothing is written. `SaleGate` gains `listPath` and `frame`, so the mobile not-found, error and loading states keep a header and back link.
+- **Suppliers (read-only on mobile):**
+  - **List:** search and a status filter.
+  - **Profile:** Call and Email links, four recorded figures labelled "Not bank-verified" and "Not owed until received", purchases with a status filter, recorded payments each marked "Not verified", and the statement as an operational record.
+  - Editing and recording payments link to the full admin.
+- **Purchases:**
+  - The list defaults to Awaiting goods.
+  - The detail shows line quantities, costs, GST and, while awaiting goods, stock now and after receiving.
+  - **Receive:** a confirmation lists every line's stock change, the units and the amount owed, and says it can't be undone. It's disabled without the supplier's invoice number.
+  - A second submission gets the server's `already_received` and is reported as already done.
+  - Edit and cancel stay in the full admin.
+- **Shared components:** `ChipGroup` (single-choice 44px radio chips that wrap rather than scroll) and a `touch` size for `Pagination`.
+- **Tests (`layouts/mobile/mobile.test.tsx`, 21):**
+  - Cashiers sent to 403 on four direct URLs without any admin request; signed-out visitors sent to login with `next`.
+  - Overview figures for the store date, and a failed figure that retries.
+  - Tab state and in-shell not-found.
+  - Inventory filters in the URL and request, and an error with retry.
+  - Adjustment: review before any write and the exact body; client validation sending nothing; 409 `stock_changed` handling; a malformed id never requested.
+  - Bills: reprint calls print with no write; a missing bill.
+  - Purchases: the default filter; the receive confirmation and a single POST; `already_received`; a missing invoice number.
+  - Suppliers: unverified payment labels.
+
+**Validation:**
+- **Frontend:** typecheck, lint and build are clean. 257 tests pass.
+  - Two existing timing-sensitive tests (the admin-shell login redirect and a products list test) each timed out once under full parallel load. They pass alone and in three further full runs.
+- **Backend:** 307 passed on PostgreSQL; on SQLite, 304 passed and 3 were skipped (the PostgreSQL-only concurrency tests).
+- **Schema:** `spectacular --validate --fail-on-warn` is clean, and the regenerated schema and `api.gen.ts` match the committed ones.
+
+**Browser check (PostgreSQL dev database, Vite proxy):** 96 of 97 read-only checks plus 14 of 14 stubbed checks passed.
+- **Layout:** 16 pages at 360, 390, 820 and 1440 wide, with no horizontal overflow anywhere and no interactive target under 32px. Frequent actions use the 44px size.
+- **Behaviour:**
+  - One `<h1>`; tab state; back navigation keeping filters; a deep link surviving reload.
+  - The adjustment review showing 2 → 1, then Back to edit without confirming.
+  - No Receive on the cancelled purchase; supplier labels; the nav hidden in print.
+- **Cashier:** sent to 403 on five mobile URLs. 12 admin API calls refused with 403 (two of them were deliberately invalid POSTs).
+- **Signed out:** sent to login with `next`, and the API refused.
+- **Console:** the one "failure" was the browser logging those deliberate 404 and 403 responses. No script errors.
+- **Stubbed:** the dev database has no sales and no purchase awaiting goods, so the receipt reprint and the receive dialog were checked at 360 and 390 against a browser-stubbed sale and purchase, with every API write aborted. Print was called once, print media hid the controls, and the dialog showed 2 → 12 and 0 → 3 and was cancelled.
+- **Dev data:** the database is unchanged: 0 sales, movements still end at #70, total on hand 162, one cancelled purchase, 0 payments. `db.sqlite3` is untouched.
+
+**Decisions and limits:**
+- **Inventory replaces the spec's Products tab.** Product editing is linked from More to the full admin.
+- **No notification bell.** There is no notification backend, so the header doesn't show a bell that does nothing.
+- **Suppliers are read-only on mobile.** Recording payments, editing suppliers, and recording, editing or cancelling purchases stay in the full admin. Receiving is the one write.
+- **Unbuilt modules.** Returns, Staff, Reports and Settings have no mobile pages until their phases.
+- **Tablet and desktop.** Wider screens get the same centred column; there's no separate tablet layout.
