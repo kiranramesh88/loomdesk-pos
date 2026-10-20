@@ -881,3 +881,30 @@ Scope set by the user: the transactions list, transaction detail, receipt reprin
 - **Cashier history:** cashiers have no history page in the billing portal. The API already scopes `/sales/` to their own sales for when one is added.
 - **Not yet built:** voids, Returns (and so returns in the summary), customer search, and summary CSV export.
 - **Daily breakdown:** it lists only the latest 14 days with sales. Earlier days are reached with the date filter.
+
+### PostgreSQL validation (20 Oct 2026)
+
+Run against a local PostgreSQL 18.6 with a dedicated `loomdesk` role that has `LOGIN` and `CREATEDB` only (no superuser or `CREATEROLE`). Every run used `config.settings.test` and a throwaway `test_loomdesk` database, created and dropped by pytest-django. `db.sqlite3` was unchanged, as checked by size, modification time and hash.
+
+- **Concurrent last-unit checkout** (four tills, one unit): 11 separate runs passed, each with a fresh test database (1 run, then 10 repeats). Each time exactly one sale was saved, three were refused for stock, and stock ended at 0.
+- **Full backend suite:** the first PostgreSQL run had 194 passed and 5 failed, all in `test_client_routes_get_the_spa_shell`.
+  - **Cause:** a test-configuration mismatch, not a PostgreSQL incompatibility. `base.py` sets `ATOMIC_REQUESTS`, but the SQLite override in `config/settings/test.py` replaced the whole database dict and dropped it. So SQLite test runs never wrapped requests in transactions, unlike development and production. On PostgreSQL, the SPA fallback view tried to open a transaction in a test with no database access. With the setting restored, the same failure reproduced on SQLite.
+  - **Fixes:**
+    - The SQLite test override keeps `ATOMIC_REQUESTS: True`.
+    - `spa_index` is marked `transaction.non_atomic_requests`. It only reads `index.html`, so the app shell no longer opens a transaction or depends on the database.
+    - A guard test checks that the test settings keep `ATOMIC_REQUESTS`.
+  - **After the fixes:** 200 passed on PostgreSQL (0 failed, 0 skipped, 0 deselected). On SQLite, 199 passed and 1 was skipped (the PostgreSQL-only concurrency test).
+
+**Database configuration (current behaviour, not yet changed):**
+- `backend/.env` sets `DJANGO_SETTINGS_MODULE=config.settings.dev` and the `POSTGRES_*` values. It has no `DB_ENGINE`.
+- So `manage.py` commands without `DB_ENGINE=sqlite` target a PostgreSQL database named `loomdesk`, which hasn't been created. They fail to connect, and nothing is written anywhere.
+- Commands with `DB_ENGINE=sqlite` still use `db.sqlite3`.
+
+**Recommendations (waiting for the user's decision):**
+- **Local development:** move to PostgreSQL so development matches production. Create a `loomdesk` database owned by the `loomdesk` role, run `migrate` and `seed_demo` against it, and keep `db.sqlite3` only as a fallback. Until then, adding `DB_ENGINE=sqlite` to `backend/.env` would make plain commands use SQLite again.
+- **Production:**
+  - Use `config.settings.prod`, which `wsgi.py` and `asgi.py` already default to.
+  - Supply real environment variables or a secret manager, not a `.env` file.
+  - Give the app a dedicated role that owns only its database, with no `CREATEDB`, superuser or `CREATEROLE`. Test and dev roles must never point at production.
+  - Use a strong generated password, keep the database off the public network, and require TLS if it runs on another host (not yet configurable in settings).
+  - Use a shared cache such as Redis for the PIN lockout (see Phase 4).

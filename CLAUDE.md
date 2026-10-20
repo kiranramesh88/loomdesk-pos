@@ -23,6 +23,12 @@ cp .env.example .env                                  # settings are read from b
 ```
 
 - PostgreSQL is the supported database. When Postgres isn't installed, set `DB_ENGINE=sqlite`, either in `.env` or prefixed to a command, and Django uses `db.sqlite3` instead. Tests use in-memory SQLite under that flag.
+- **Database selection:** a variable set in the real environment beats `backend/.env` (the file only fills gaps).
+  - `DB_ENGINE=sqlite` prefixed to a command always means SQLite.
+  - Without it, and with no `DB_ENGINE` in `.env`, every command uses PostgreSQL with the `POSTGRES_*` values.
+- **Tests on PostgreSQL:** run pytest without `DB_ENGINE`. pytest-django uses `config.settings.test` and creates, then drops, a throwaway `test_<POSTGRES_DB>` database, so the role needs `CREATEDB`. If a database with that name already exists, it is dropped without asking.
+  - The concurrent last-unit checkout test runs only on PostgreSQL.
+  - Windows install: PostgreSQL 18 runs as the `postgresql-x64-18` service. Its tools (`psql`, `pg_isready`) are in `C:\Program Files\PostgreSQL\18\bin`, not on PATH.
 - Every seeded account uses the password `SEED_DEMO_PASSWORD` (default `loomdesk-demo`). `seed_demo` prints each account's email, role and approval PIN.
 
 Frontend commands run from `frontend/`:

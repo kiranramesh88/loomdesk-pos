@@ -1,4 +1,5 @@
 import pytest
+from django.conf import settings as django_settings
 
 
 @pytest.fixture
@@ -11,6 +12,7 @@ def dist(tmp_path, settings):
 @pytest.mark.parametrize("path", ["/admin/", "/admin/products/12", "/admin/mobile/", "/billing", "/login"])
 def test_client_routes_get_the_spa_shell(client, dist, path):
     # Direct loads and refreshes of nested client routes must reach the SPA, not a Django 404.
+    # No db fixture on purpose: the shell must not need a database transaction (ATOMIC_REQUESTS is on).
     response = client.get(path)
     assert response.status_code == 200
     assert response["Content-Type"].startswith("text/html")
@@ -23,3 +25,8 @@ def test_api_and_static_paths_never_get_the_spa_shell(client, dist, path):
     response = client.get(path)
     assert response.status_code == 404
     assert b'<div id="root"></div>' not in response.content
+
+
+def test_test_settings_keep_atomic_requests():
+    # The SQLite test override once dropped this, so SQLite runs hid a failure that PostgreSQL showed.
+    assert django_settings.DATABASES["default"]["ATOMIC_REQUESTS"] is True

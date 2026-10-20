@@ -1,9 +1,12 @@
 from django.conf import settings
+from django.db import transaction
 from django.http import HttpRequest, HttpResponse
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_GET
 
 
+# The shell is a file read: no transaction (ATOMIC_REQUESTS would open one), so it loads even if the DB is down.
+@transaction.non_atomic_requests
 @require_GET
 @ensure_csrf_cookie
 def spa_index(request: HttpRequest) -> HttpResponse:
