@@ -1,6 +1,6 @@
 # Deploying LoomDesk
 
-LoomDesk is one Django process that serves the API, the built React app and uploaded photos, backed by PostgreSQL. It needs no other services. This guide is host-agnostic: any Linux or Windows host, VM or platform that can run Python 3.13 and reach PostgreSQL will do. The repository's `Dockerfile` builds a ready image (section 2), and section 10 is the configuration prepared for Render.
+LoomDesk is one Django process that serves the API, the built React app and uploaded photos, backed by PostgreSQL. It needs no other services. This guide is host-agnostic: any Linux or Windows host, VM or platform that can run Python 3.13 and reach PostgreSQL will do. The repository's `Dockerfile` builds a ready image (section 2), and section 10 is the configuration prepared for Render's free plan.
 
 ```
 browser ──HTTPS──▶ TLS proxy / platform router ──HTTP──▶ Waitress ─▶ Django
@@ -34,6 +34,9 @@ Set these in the host's secret manager or service environment. **Production neve
 | `DJANGO_CSP_REPORT_ONLY` | no | Default `false`. `true` sends the Content-Security-Policy as report-only, so violations show in the browser console without blocking anything (section 7). |
 | `WAITRESS_TRUSTED_PROXY` | yes, for the image | The address the proxy connects from, or `*` behind a platform router (section 6). `deploy/start.sh` refuses to start without it. |
 | `PORT`, `WAITRESS_THREADS` | no | For the image: the port to listen on (default `8000`; platforms set it) and Waitress threads (default `8`). |
+| `LOOMDESK_MIGRATE_ON_START` | no | `true` runs `migrate` at each start. Use it only on a single instance with no release step, such as Render's free plan. |
+| `LOOMDESK_DEMO_STORE` | no | `true` sets up a demo store at each start: `setup_store`, the demo catalogue if the store is empty, and the demo photos put back. Never set it for a real store. |
+| `LOOMDESK_ADMIN_EMAIL`, `LOOMDESK_ADMIN_NAME`, `LOOMDESK_ADMIN_PASSWORD` | no | Creates this admin at start if the account doesn't exist yet, and never changes it afterwards. For a host without a shell. Delete the password variable after the first sign-in. |
 
 Never set `DB_ENGINE` in production (the settings refuse `sqlite`), and never set `SEED_DEMO_PASSWORD`.
 
@@ -138,6 +141,8 @@ waitress-serve --listen=127.0.0.1:8000 --threads=8 --trusted-proxy=127.0.0.1 \
 
 ## 8. Smoke test after each deploy
 
+`python deploy/smoke_test.py <url>` checks items 1 and 2 and the 403 in item 3. With `--admin-email`, it also signs in and checks that the products and photos load. It uses only the standard library and prints no secrets.
+
 1. `GET /api/v1/auth/session/` → 200 `{"user": null}` and a `csrftoken` cookie marked `Secure`.
 2. `GET /admin/mobile/` and `/admin/products/12` → 200 HTML (the SPA), with a `Content-Security-Policy` header whose nonce matches the page's `csp-nonce` meta. `GET /static/assets/does-not-exist.js` → 404 text.
 3. Sign in as an admin. A cashier opening `/admin` lands on `/403`, and `GET /api/v1/inventory/variants/` as a cashier → 403.
@@ -163,61 +168,68 @@ waitress-serve --listen=127.0.0.1:8000 --threads=8 --trusted-proxy=127.0.0.1 \
 - **One register.** There's no per-till setup or cash-drawer reconciliation.
 - **The audit trail** is append-only through the application. Someone with direct database access can still change it.
 
-## 10. Render (prepared, not deployed)
+## 10. Render, free plan (prepared, not deployed)
 
-`render.yaml` is a Render Blueprint for this guide's setup, validated against Render's published schema. **Applying it creates paid resources.** Nothing has been created yet.
+`render.yaml` is a Render Blueprint for **Render's free plan**, validated against Render's published schema. It costs nothing, but the free plan has hard limits, and the start-up script works around the ones that matter.
 
-| Resource | Setting |
-|---|---|
-| Web service `loomdesk` | Docker (`./Dockerfile`, context `.`), plan **Starter** (512 MB, 0.5 CPU), region **Singapore**, auto-deploy off |
-| Pre-deploy command | `python manage.py migrate --noinput` |
-| Health check | `/api/v1/auth/session/`. Render checks over plain HTTP, so it gets the 301 to HTTPS, which Render counts as healthy. |
-| Disk `media` | 1 GB at `/var/data`. Photos go to `/var/data/media`. Snapshotted daily and kept 7 days. A disk means one instance, and a few seconds of downtime per deploy. |
-| Database `loomdesk-db` | Render Postgres **Basic-256mb**, 1 GB storage, PostgreSQL 18, Singapore, database `loomdesk`, user `loomdesk_app`, no internet access (`ipAllowList: []`) |
-| Environment | `DJANGO_SECRET_KEY` (pasted, at least 50 characters: Render's `generateValue` gives 44), `WAITRESS_TRUSTED_PROXY=*`, `DJANGO_SECURE_HSTS_SECONDS=3600` for the first deploy, `POSTGRES_HOST/PORT/DB/USER/PASSWORD` from the database. `DJANGO_ALLOWED_HOSTS` falls back to Render's `RENDER_EXTERNAL_HOSTNAME`. |
+**Free-plan limits, and what LoomDesk does about each:**
 
-**Steps to a public URL**, once the price is approved:
-1. Push the repository to a private GitHub repository; CI (`.github/workflows/ci.yml`) runs the tests and builds the image there.
-2. In Render: **New → Blueprint**, connect the repository, review the two resources and their prices, and paste `DJANGO_SECRET_KEY` when asked. Make it with `python -c "import secrets; print(secrets.token_urlsafe(64))"`.
-3. **Deploy** the web service by hand. The pre-deploy command creates the tables.
-4. Open the service's **Shell** and set up the store:
+| Limit (Render's free plan) | Effect | What LoomDesk does |
+|---|---|---|
+| The service sleeps after 15 minutes without traffic | The first visit after a pause waits about a minute | Nothing to fix. Tell reviewers to expect it. |
+| No persistent disk | Files written at runtime are lost on every restart, redeploy or sleep | The demo photos are built into the image, and `restore_demo_photos` puts them back at each start. **Photos uploaded on the site are lost at the next restart.** |
+| No Shell, one-off jobs or pre-deploy step | Setup commands can't be typed in | `deploy/start.sh` migrates (`LOOMDESK_MIGRATE_ON_START`), sets up the demo store (`LOOMDESK_DEMO_STORE`) and creates the first admin from environment variables |
+| **The free database expires 30 days after creation.** Render deletes it, with all its data, 14 days after that. | Sales, stock changes and accounts made on the site are gone | Note the creation date. Before it expires, upgrade the database to a paid plan, or accept a fresh start: a new free database sets itself up again on the next boot. |
+| The free database has no backups | Nothing can be restored | Treat the hosted store as a demo, not a real shop's records |
+| 750 free instance hours a month per workspace | Enough for one service that's always on | Don't run a second free service in the same workspace |
+
+**Configuration in `render.yaml`:**
+- **Web service `loomdesk`:** Docker (`./Dockerfile`, context `.`), plan **free**, region **Singapore**, auto-deploy off.
+  - **Health check:** `/api/v1/auth/session/`. Render checks over plain HTTP, so it gets the 301 to HTTPS, which Render counts as healthy.
+- **Database `loomdesk-db`:** Render Postgres **free** (1 GB), PostgreSQL 18, Singapore, database `loomdesk`, user `loomdesk_app`, no internet access (`ipAllowList: []`).
+- **Fixed environment:** `WAITRESS_TRUSTED_PROXY=*`, `DJANGO_SECURE_HSTS_SECONDS=3600` for the first deploy, `LOOMDESK_MIGRATE_ON_START=true`, `LOOMDESK_DEMO_STORE=true`, and `POSTGRES_HOST/PORT/DB/USER/PASSWORD` taken from the database. `DJANGO_ALLOWED_HOSTS` falls back to Render's `RENDER_EXTERNAL_HOSTNAME`.
+- **Entered by you** on the Blueprint's review screen (`sync: false`, so never in the repository):
+  - `DJANGO_SECRET_KEY`: at least 50 characters. Render's `generateValue` gives 44, which is too short.
+  - `LOOMDESK_ADMIN_EMAIL`, `LOOMDESK_ADMIN_NAME` and `LOOMDESK_ADMIN_PASSWORD`: the first admin account.
+
+**What each start does** (`deploy/start.sh`):
+1. Gives the media folder to the app user.
+2. Runs `check --deploy`.
+3. Migrates.
+4. Clears expired sessions.
+5. Runs `setup_store`.
+6. Runs `load_demo_catalogue --if-empty`. It loads the demo products, stock and suppliers into an empty store only, and creates no accounts.
+7. Runs `restore_demo_photos`.
+8. Runs `create_staff --skip-existing` for the first admin. It creates the account once and never changes it afterwards.
+9. Starts Waitress as the unprivileged user. The admin password is removed from the environment first, so the server never holds it.
+
+CI runs this start-up twice against PostgreSQL, the second time with no media, and runs the smoke test after each.
+
+**Steps to a public URL:**
+1. Make a secret key, and a long, unique admin password, on your machine:
    ```sh
-   python manage.py setup_store --name "…" --code "…" --address "…" --state Kerala   # add --gstin for a real store
-   sh /app/deploy/as_app.sh python manage.py fetch_seed_photos      # optional: the demo photos (Unsplash)
-   sh /app/deploy/as_app.sh python manage.py load_demo_catalogue    # demo products, stock and suppliers; no accounts
-   python manage.py create_staff --email … --name "…" --role admin   # prompts for the password
+   python -c "import secrets; print(secrets.token_urlsafe(64))"
    ```
-5. Run the smoke test (section 8) against `https://<service>.onrender.com`. Then raise `DJANGO_SECURE_HSTS_SECONDS` to `31536000`.
+   Keep both in a password manager. Never put them in the repository or a chat.
+2. In Render: **New → Blueprint**, connect the GitHub repository (giving Render access to this one only), branch `master`.
+3. On the review screen, check that both resources say **Free**. Enter `DJANGO_SECRET_KEY`, `LOOMDESK_ADMIN_EMAIL`, `LOOMDESK_ADMIN_NAME` and `LOOMDESK_ADMIN_PASSWORD`. Then **Apply**.
+4. **Deploy** the web service if it doesn't start on its own. The first build takes several minutes; the log shows "Demo catalogue loaded" and "Created Admin account".
+5. Sign in at `https://<service>.onrender.com/login`. Then **delete `LOOMDESK_ADMIN_PASSWORD`** from the service's Environment page: the account keeps its password, and the next start skips it.
+6. Run the smoke test from your machine. The first form is read-only. The second also signs in, and reads the password from the environment variable you name, never from the command line:
+   ```sh
+   python deploy/smoke_test.py https://<service>.onrender.com
+   read -rs SMOKE_ADMIN_PASSWORD && export SMOKE_ADMIN_PASSWORD
+   python deploy/smoke_test.py https://<service>.onrender.com --admin-email <admin email>      --admin-password-env SMOKE_ADMIN_PASSWORD --min-products 9 --min-photos 1
+   ```
+7. Once HTTPS works, raise `DJANGO_SECURE_HSTS_SECONDS` to `31536000`.
 
-**Demo data and reviewer accounts:**
-- `load_demo_catalogue` loads the demo products, variants, opening stock and suppliers. It creates no users, passwords or PINs, and it refuses a store that already has products, stock movements, suppliers, purchases or sales. It never replaces anything.
+**Reviewer accounts:**
+- On the **Staff** page, add an admin and a cashier for reviewers. Each gets a one-time set-password link, valid 3 days. Open the link yourself to set a long random password, or send the link privately.
+- Send credentials privately, never in the repository or the README. After the review, deactivate those accounts on the Staff page (history is kept).
 - `seed_demo` still refuses production settings: its accounts share a published password.
-- Create each reviewer account with `create_staff`. It prompts for the password twice and rejects the demo password and weak ones.
-  - An admin account and a cashier account show both sides of the app.
-  - Give each its own long random password, and send credentials privately, never in the repository or the README.
-  - Set an admin's discount-approval PIN on the Staff page, or with `--pin-env`.
-- After the review, deactivate the reviewer accounts on the Staff page (history is kept), or change their passwords.
 
-**Expected monthly cost** (published prices, October 2026; Render changed its prices in August 2026, so confirm on the Blueprint's review screen):
-
-| Item | Price |
-|---|---|
-| Web service, Starter | $7 |
-| Postgres Basic-256mb | $6 |
-| Postgres storage, 1 GB | about $0.30 |
-| Disk, 1 GB | about $0.25 |
-| **Total** | **about $13.55 a month, plus tax** |
-
-- **Likely extras:**
-  - Outbound bandwidth beyond the workspace's included amount.
-  - A paid workspace plan, if the account isn't on Hobby.
-  - Growing the database or disk; storage can grow but not shrink.
-- **Not needed:** Render cron jobs (expired sessions are cleared at each start) and Key Value (no cache is used).
-- **Charges stop when the resources are deleted.** Deleting the database deletes its data and backups.
-
-**Backups:**
-- **Postgres:** point-in-time recovery for the last 3 days on the Hobby workspace (7 on Pro), and logical backups kept 7 days.
-- **Photos:** the disk's daily snapshots.
-- **Your own copy:** the image has no PostgreSQL client tools. Before a risky change, download a logical backup from the database's Recovery page in the dashboard.
-  - Or allow your own address in the database's access control for a moment, and run `pg_dump -Fc` from Windows (`C:\Program Files\PostgreSQL\18\bin\pg_dump.exe`) with the external connection string. Remove the address afterwards.
-  - Test a restore into a separate database.
+**Moving to a paid plan later:**
+- **Disk:** change the web service to **Starter** and add a disk (`mountPath: /var/data`, 1 GB). Uploaded photos then survive restarts.
+- **Database:** upgrade it to **Basic-256mb** before the free one expires, which keeps its data.
+- **Release step:** optionally, move `migrate` to the pre-deploy command and set `LOOMDESK_MIGRATE_ON_START=false`.
+- **Cost:** about $13.55 a month in October 2026 ($7 + $6 + about $0.55 of storage). Render changes prices, so check the review screen.

@@ -1398,6 +1398,24 @@ Scope set by the user: fix the API sign-in throttling race, review deployment re
   - `load_demo_catalogue` refused `loomdesk_prod`, which has data.
 - **CI on GitHub (private repository `kiranramesh88/loomdesk-pos`, commit `448c768`):** the `backend`, `frontend` and `image` jobs all passed. That includes the real Docker build, and the image's checks for no secrets or data, collected assets, and the start script's proxy guard.
 
+**12.3 Render's free plan** (the user's decision: deploy on the free plan instead of the paid one).
+- **Checked against Render's docs:** free web services sleep after 15 idle minutes and have no disk, Shell or one-off jobs. The free Postgres expires 30 days after creation, is deleted 14 days later, and has no backups.
+- **`render.yaml`:**
+  - The web service and the database are both on the free plan; the disk and the pre-deploy command are removed.
+  - New variables: `LOOMDESK_MIGRATE_ON_START`, `LOOMDESK_DEMO_STORE`, and the `LOOMDESK_ADMIN_*` values entered on the review screen.
+- **Start-up without a shell (`deploy/start.sh`):**
+  - It migrates.
+  - It runs `setup_store`, then `load_demo_catalogue --if-empty`, which skips a store that has records, then `restore_demo_photos`.
+  - It runs `create_staff --skip-existing`, which leaves an existing account untouched.
+  - It unsets the admin password before starting the server.
+- **Photos:** the image downloads the demo photos at build time. `restore_demo_photos` writes only missing files, to the paths the records already hold, and never changes a record. Photos uploaded on the site can't come back without a disk, and the command reports them.
+- **`deploy/smoke_test.py`:** checks §8 of the deployment guide against any URL, and optionally signs in as an admin. Standard library only; it prints no secrets.
+- **CI** starts the image twice against PostgreSQL, the second time in a new container with no media:
+  - The smoke test passes both times.
+  - The second start skips the catalogue and the existing admin, and restores the photos.
+  - The server runs as the app user, without the admin password in its environment.
+- **The plan's other limits:** they're listed in `docs/deployment.md` §10, and the paid upgrade path is kept there.
+
 ---
 
 ## 10. Requirements traceability

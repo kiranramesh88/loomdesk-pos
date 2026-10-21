@@ -1,5 +1,6 @@
-# Render Blueprint for LoomDesk: one Docker web service with a disk for product photos, and PostgreSQL.
-# Applying it (Dashboard → New → Blueprint) creates paid resources; see docs/deployment.md §10 first.
+# Render Blueprint for LoomDesk on Render's FREE plan: one Docker web service and a free PostgreSQL.
+# Free-plan limits (docs/deployment.md §10): the service sleeps after 15 idle minutes; there is no disk,
+# shell or pre-deploy step; the free database expires 30 days after creation and has no backups.
 # Schema: https://render.com/schema/render.yaml.json
 
 services:
@@ -8,16 +9,11 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    plan: starter            # 512 MB, 0.5 CPU; a disk needs a paid instance
+    plan: free
     region: singapore        # nearest Render region to India; the database must be in the same one
     autoDeployTrigger: "off" # deploy by hand from the dashboard while validating
-    preDeployCommand: python manage.py migrate --noinput
     # Over plain HTTP this answers 301 to HTTPS, which Render counts as healthy.
     healthCheckPath: /api/v1/auth/session/
-    disk:
-      name: media
-      mountPath: /var/data   # DJANGO_MEDIA_ROOT is /var/data/media (set in the Dockerfile)
-      sizeGB: 1
     envVars:
       # At least 50 characters, so not `generateValue` (Render's are 44). Paste one made with
       # python -c "import secrets; print(secrets.token_urlsafe(64))"
@@ -29,8 +25,20 @@ services:
       # Raise to 31536000 once HTTPS is proven on the final hostname.
       - key: DJANGO_SECURE_HSTS_SECONDS
         value: "3600"
+      # No pre-deploy step or shell on the free plan: deploy/start.sh migrates, sets up the demo store
+      # (catalogue only if empty, photos put back after each restart) and creates the first admin.
+      - key: LOOMDESK_MIGRATE_ON_START
+        value: "true"
+      - key: LOOMDESK_DEMO_STORE
+        value: "true"
+      - key: LOOMDESK_ADMIN_EMAIL
+        sync: false
+      - key: LOOMDESK_ADMIN_NAME
+        sync: false
+      # Remove this one once you've signed in; the account is never changed by it afterwards.
+      - key: LOOMDESK_ADMIN_PASSWORD
+        sync: false
       # DJANGO_ALLOWED_HOSTS defaults to the service's onrender.com hostname (deploy/start.sh).
-      # Add it here, comma-separated, only for a custom domain.
       - key: POSTGRES_HOST
         fromDatabase: { name: loomdesk-db, property: host }
       - key: POSTGRES_PORT
@@ -44,8 +52,7 @@ services:
 
 databases:
   - name: loomdesk-db
-    plan: basic-256mb
-    diskSizeGB: 1            # can grow later, never shrink
+    plan: free               # 1 GB; expires 30 days after creation, deleted 14 days later
     region: singapore
     postgresMajorVersion: "18"
     databaseName: loomdesk

@@ -28,16 +28,17 @@ COPY backend/ ./
 COPY --from=frontend /app/frontend/dist /app/frontend/dist
 COPY deploy/start.sh deploy/as_app.sh /app/deploy/
 
-# Collect the SPA and admin assets into the image. Production settings refuse to load without these
-# variables, so placeholders are given for this one step: collectstatic opens no database connection,
-# and none of these values exist at runtime.
+# Collect the SPA and admin assets into the image, and download the demo photos (Unsplash License) for
+# load_demo_catalogue and restore_demo_photos. Production settings refuse to load without these
+# variables, so placeholders are given for this one step: neither command opens a database connection,
+# and none of these values exist at runtime. A photo that fails to download is reported and skipped.
 RUN DJANGO_SECRET_KEY=build-time-placeholder-not-used-at-runtime-0123456789abcdef \
     DJANGO_ALLOWED_HOSTS=build.invalid \
     POSTGRES_DB=build POSTGRES_USER=build POSTGRES_PASSWORD=build POSTGRES_HOST=build.invalid \
-    python manage.py collectstatic --noinput
+    sh -c "python manage.py collectstatic --noinput && python manage.py fetch_seed_photos"
 
-# The server runs as an unprivileged user. seed/photos/ is writable for fetch_seed_photos; the media
-# disk is mounted at run time, so start.sh fixes its ownership then drops to this user.
+# The server runs as an unprivileged user. The media folder (a disk, when the host has one) is
+# given to this user by start.sh, which then drops to it.
 RUN useradd --system --uid 10001 --home-dir /app --shell /usr/sbin/nologin loomdesk \
     && mkdir -p seed/photos /var/data/media \
     && chown -R loomdesk:loomdesk seed /var/data

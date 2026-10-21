@@ -64,6 +64,15 @@ jobs:
 
   image:
     runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: loomdesk_ci
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: loomdesk
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U loomdesk_ci" --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - name: Build the production image
@@ -78,3 +87,39 @@ jobs:
         run: |
           ! docker run --rm -e DJANGO_SECRET_KEY=x -e DJANGO_ALLOWED_HOSTS=x loomdesk:ci 2>err.txt
           grep -q "WAITRESS_TRUSTED_PROXY" err.txt
+      - name: Free-plan start-up, twice, the second time with no media (as after a Render free restart)
+        run: |
+          set -eu
+          secret=$(python3 -c "import secrets; print(secrets.token_urlsafe(64))")
+          export SMOKE_ADMIN_PASSWORD="ci-$(python3 -c 'import secrets; print(secrets.token_urlsafe(18))')"
+          start() {
+            docker run -d --name app --network host \
+              -e PORT=8000 -e DJANGO_SECRET_KEY="$secret" -e DJANGO_ALLOWED_HOSTS=localhost \
+              -e WAITRESS_TRUSTED_PROXY=127.0.0.1 \
+              -e POSTGRES_HOST=localhost -e POSTGRES_DB=loomdesk -e POSTGRES_USER=loomdesk_ci -e POSTGRES_PASSWORD=ci-only-password \
+              -e LOOMDESK_MIGRATE_ON_START=true -e LOOMDESK_DEMO_STORE=true \
+              -e LOOMDESK_ADMIN_EMAIL=ci-admin@example.com -e LOOMDESK_ADMIN_PASSWORD="$SMOKE_ADMIN_PASSWORD" \
+              loomdesk:ci > /dev/null
+            for _ in $(seq 90); do
+              curl -fsS -o /dev/null -H "X-Forwarded-Proto: https" http://localhost:8000/api/v1/auth/session/ && return 0
+              sleep 2
+            done
+            docker logs app; return 1
+          }
+          smoke() {
+            python3 deploy/smoke_test.py http://localhost:8000 --forwarded-proto https \
+              --admin-email ci-admin@example.com --admin-password-env SMOKE_ADMIN_PASSWORD --min-products 9 --min-photos 1
+          }
+          start; smoke
+          docker logs app 2>&1 | grep -q "Demo catalogue loaded"
+          docker logs app 2>&1 | grep -q "Created Admin account for ci-admin@example.com"
+          # The server runs unprivileged and never holds the admin password.
+          test "$(docker exec app awk '/^Uid:/ {print $2}' /proc/1/status)" = "$(docker exec app id -u loomdesk)"
+          test "$(docker exec app sh -c "tr '\0' '\n' < /proc/1/environ | grep -c '^LOOMDESK_ADMIN_PASSWORD=' || true")" = 0
+          # A new container keeps the database but loses every media file, like a free restart.
+          docker rm -f app > /dev/null
+          start; smoke
+          docker logs app 2>&1 | grep -q "the demo catalogue wasn't loaded"
+          docker logs app 2>&1 | grep -q "already exists; left unchanged"
+          docker logs app 2>&1 | grep -Eq "Demo photos restored: [1-9]"
+          docker rm -f app > /dev/null

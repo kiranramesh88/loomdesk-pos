@@ -88,7 +88,11 @@ cd frontend && npm run typecheck && npm run lint && npx vitest run --maxWorkers=
   - `setup_store` creates the store record.
   - `load_demo_catalogue` adds the demo products, stock and suppliers, with no accounts.
   - `create_staff` creates each account with its own password.
-- **Render:** `render.yaml` describes the planned Render setup (deployment guide §10). It isn't deployed yet.
+- **Render:** `render.yaml` is a Blueprint for Render's free plan (deployment guide §10). It isn't deployed yet. On the free plan:
+  - The app sleeps when idle.
+  - Uploaded photos are lost on restart.
+  - The free database expires after 30 days.
+- **Smoke test:** `deploy/smoke_test.py <url>` checks any deployment.
 
 ## Documentation
 
