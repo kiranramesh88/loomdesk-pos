@@ -1396,6 +1396,7 @@ Scope set by the user: fix the API sign-in throttling race, review deployment re
   - `start.sh` (paths pointed at the copy, bound to 127.0.0.1, `clearsessions` left out so `loomdesk_prod` was only read): it refused to start without the proxy setting, then passed `check --deploy` and served.
   - Smoke checks: the session endpoint answers with a `Secure` CSRF cookie; SPA routes return 200 with `no-cache`; hashed assets are gzip-compressed and immutable; a missing asset gets 404; an unknown API path gets the error envelope; the CSP nonce matches the page; an anonymous inventory request gets 403.
   - `load_demo_catalogue` refused `loomdesk_prod`, which has data.
+- **CI on GitHub (private repository `kiranramesh88/loomdesk-pos`, commit `448c768`):** the `backend`, `frontend` and `image` jobs all passed. That includes the real Docker build, and the image's checks for no secrets or data, collected assets, and the start script's proxy guard.
 
 ---
 
