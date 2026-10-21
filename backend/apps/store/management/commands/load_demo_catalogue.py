@@ -25,6 +25,11 @@ class Command(BaseCommand):
             help="Folder of product photos named by product code, e.g. P-1001.jpg (default: seed/photos/, "
             "filled by fetch_seed_photos). Products without a file have no photo.",
         )
+        parser.add_argument(
+            "--if-empty",
+            action="store_true",
+            help="If the store already has records, change nothing and succeed (for a start-up script).",
+        )
 
     @transaction.atomic
     def handle(self, *args, **options):
@@ -35,6 +40,9 @@ class Command(BaseCommand):
                                  ("purchases", Purchase), ("sales", Sale))
             if model.objects.exists()
         ]
+        if found and options["if_empty"]:
+            self.stdout.write(f"This store already has {', '.join(found)}; the demo catalogue wasn't loaded.")
+            return
         if found:
             raise CommandError(
                 f"This store already has {', '.join(found)}. load_demo_catalogue only fills a new, empty store; nothing was changed."

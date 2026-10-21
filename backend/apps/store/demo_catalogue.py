@@ -84,3 +84,28 @@ def load_catalogue(*, actor=None, photo_dir: Path = PHOTO_DIR) -> int:
 def load_suppliers() -> None:
     for name, category, phone, email in seed_data.SUPPLIERS:
         Supplier.objects.create(name=name, category=category, phone=phone, email=email)
+
+
+def restore_photos(photo_dir: Path = PHOTO_DIR) -> tuple[int, int]:
+    """Put back the demo products' photo files where their records point, if the files are gone.
+
+    For a host with no persistent disk, where media files vanish at each restart but the database keeps
+    the paths. Only writes missing files; records, and products without a photo, are never changed.
+    Returns (restored, still missing).
+    """
+    demo = {sku: code for code, _name, _cat, sku, *_rest in seed_data.PRODUCTS}
+    restored = missing = 0
+    for product in Product.objects.exclude(image=""):
+        storage = product.image.storage
+        if storage.exists(product.image.name):
+            continue
+        photo = photo_dir / f"{demo.get(product.sku, '')}.jpg"
+        if product.sku in demo and photo.exists():
+            with photo.open("rb") as fh:
+                saved = storage.save(product.image.name, File(fh))
+            if saved == product.image.name:
+                restored += 1
+                continue
+            storage.delete(saved)  # never leave a stray copy under another name
+        missing += 1
+    return restored, missing

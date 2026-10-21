@@ -25,6 +25,11 @@ class Command(BaseCommand):
         parser.add_argument(
             "--pin-env", help="Name of an environment variable holding a 4–6 digit discount approval PIN (admins and senior cashiers)."
         )
+        parser.add_argument(
+            "--skip-existing",
+            action="store_true",
+            help="If the account already exists, leave it unchanged and succeed (for a start-up script).",
+        )
 
     def _secret(self, env_name: str | None, prompt: str) -> str:
         if env_name:
@@ -41,6 +46,10 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         email = User.objects.normalize_email(options["email"].strip()).lower()
         if User.objects.filter(email__iexact=email).exists():
+            if options["skip_existing"]:
+                # Never touches the existing account: its password, PIN, role and status stay as they are.
+                self.stdout.write(f"An account for {email} already exists; left unchanged.")
+                return
             raise CommandError(f"An account for {email} already exists.")
         role = options["role"]
 
